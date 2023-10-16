@@ -1,2 +1,2 @@
-# NeuMan - Neuronal Manifold Diversity
+# NeuManD - Neuronal Manifold Diversity
 
