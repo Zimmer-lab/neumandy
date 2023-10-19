@@ -80,7 +80,7 @@ def get_datasets_dict(root_dir, target_file, include, exclude, recording_type):
             filename = filename.replace("_Ctrl", "")
         matfile = load_matlab_file(all_paths[index])
         datasets[filename][trace] = {
-            recording_type: matfile["simple"][recording_type], 'ID1': matfile["simple"]['ID1']}
+            recording_type: matfile[recording_type], 'ID1': matfile['ID1']}
 
     with open('datasets.pkl', 'wb') as file:
         dill.dump(datasets, file)
