@@ -4,7 +4,7 @@ Following utility is used to convert MATLAB data to a python readable format. It
 
 ### **When to use this tool:**
 
-* If the directory that contains all your recordings have following structure:
+* If the directory that contains all your recordings has following structure:
 
         +---Recording1
         |   +---Head
