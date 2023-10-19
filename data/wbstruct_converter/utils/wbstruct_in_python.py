@@ -4,39 +4,43 @@ import os
 import sys
 from tqdm import tqdm
 from collections import defaultdict
-import openpyxl 
+import openpyxl
 import pandas as pd
 import dill
 
 
 def contains_substring(text, substring_list):
-    """_summary_
+    """checks if a string contains any of the substrings in a list
 
     Args:
-        text (_type_): _description_
-        substring_list (_type_): _description_
-l
+        text (string): the string to check
+        substring_list (list): a list of substrings to check for
+
     Returns:
-        _type_: _description_
+        boolean: True if the string contains any of the substrings, False otherwise
     """
-    
+
     for substring in substring_list:
         if substring in text:
             return True
     return False
 
 
-def find_file_old(start_dir, target_file, include, exclude):
-    found_files = []
-    for root, dirs, files in os.walk(start_dir):
-        if target_file in files and contains_substring(root, include) and not contains_substring(root, exclude):
-            found_files.append(os.path.join(root, target_file))
-    return found_files
+def find_file(root_dir, target_file, include, exclude):
+    """walks through a directory and returns a list of all files that match the target file and 
+      contain the include string but not the exclude string
 
+    Args:
+        root_dir (string): the path to the directory to search
+        target_file (string): the file or extension to search for (e.g. wbstruct.mat, .xlsx)
+        include (list): list of strings out of which the path should contain at least one
+        exclude (list): list of strings that the path must not contain
 
-def find_file(start_dir, target_file, include, exclude):
+    Returns:
+        list: list of paths to the files that match the criteria
+    """
     found_files = []
-    for root, dirs, files in os.walk(start_dir):
+    for root, dirs, files in os.walk(root_dir):
         for f in files:
             if f.endswith(target_file) and contains_substring(root, include) and not contains_substring(root+f, exclude):
                 found_files.append(os.path.join(root, f))
@@ -44,6 +48,15 @@ def find_file(start_dir, target_file, include, exclude):
 
 
 def load_matlab_file(file_path):
+    """loads a matlab file and returns the data
+
+    Args:
+        file_path (string): the path to the file   
+
+    Returns:
+        dict: the data from the matlab file loaded into a dictionary
+    """
+
     try:
         mat = scio.loadmat(file_path)
     except:
@@ -51,8 +64,16 @@ def load_matlab_file(file_path):
     return mat
 
 
-
 def safe_str_contains(text, pattern):
+    """safely checks if a string contains a substring
+
+    Args:
+        text (string): the string to check
+        pattern (string): the substring to check for
+
+    Returns:
+        boolean: True if the string contains the substring, False otherwise
+    """
     try:
         return pd.Series(text).astype(str).str.contains(pattern, na=False)[0]
     except Exception as e:
@@ -62,6 +83,14 @@ def safe_str_contains(text, pattern):
 
 
 def get_datasets_dict(root_dir, target_file, include, exclude, recording_type):
+    """ get a dictionary of dictionaries containing the data from the matlab files and save it to a pickle file
+
+    Args:
+        recording_type (string): the type of recording to load from the matlab file (e.g. 'spikes', 'LFP')
+
+    Returns:
+        defaultdict: a dictionary of dictionaries containing the data from the matlab files
+    """
 
     datasets = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
 
@@ -80,7 +109,7 @@ def get_datasets_dict(root_dir, target_file, include, exclude, recording_type):
             filename = filename.replace("_Ctrl", "")
         matfile = load_matlab_file(all_paths[index])
         datasets[filename][trace] = {
-            recording_type: matfile[recording_type], 'ID1': matfile['ID1']}
+            recording_type: matfile["simple"][recording_type], 'ID1': matfile["simple"]['ID1']}
 
     with open('datasets.pkl', 'wb') as file:
         dill.dump(datasets, file)
@@ -88,7 +117,15 @@ def get_datasets_dict(root_dir, target_file, include, exclude, recording_type):
     return datasets
 
 
+
+
 def get_IDs_dict(root_dir, target_file, include, exclude):
+
+    """ get a dictionary containing the IDs from all files
+
+    Returns:
+        dict: a dictionary containing the IDs from all files
+    """    
 
     dictofIDs = defaultdict(lambda: defaultdict(list))
 
