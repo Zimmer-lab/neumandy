@@ -27,10 +27,13 @@ def saving_as_hdf5(dataframes):
 def saving_as_pkl(dataframes):
     with open('dataframes.pkl', 'wb') as file:
         dill.dump(dataframes, file)
+    
+    print("Dataframes stored as a .pkl file. Refer to documentation to load the file.")
+
     return None
 
 
-def get_dataframes(dictionaries, recording_type, save_as_hdf5):
+def get_dataframes(dictionaries, recording_type, save_as_hdf5=False):
     """This function converts the dictionary of wbstruct data into a dictionary of dataframes
 
     Args:
@@ -65,7 +68,7 @@ def get_dataframes(dictionaries, recording_type, save_as_hdf5):
     return datasets
 
 
-def get_dataframes_from_excel(dictionaries, IDs, recording_type, save_as_hdf5):
+def get_dataframes_from_excel(dictionaries, IDs, recording_type, save_as_hdf5=False):
     """This function converts the dictionary of wbstruct data into a dictionary of dataframes and 
         uses the IDs from a separate dictionary
 

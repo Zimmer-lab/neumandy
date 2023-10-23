@@ -1,10 +1,8 @@
 import scipy.io as scio
 import mat73
 import os
-import sys
 from tqdm import tqdm
 from collections import defaultdict
-import openpyxl
 import pandas as pd
 import dill
 import numpy as np
