@@ -84,7 +84,7 @@ def safe_str_contains(text, pattern):
 
 
 def remove_outer_arrays(arr):
-    while isinstance(arr, list) or len(arr)==1:
+    while isinstance(arr, list):
         arr = arr[0]
     return arr
 
@@ -118,7 +118,7 @@ def get_datasets_dict(root_dir, target_file, include, exclude, recording_type, s
         if simple:
             matfile = matfile["simple"]
         recording=remove_outer_arrays(matfile[recording_type])
-        IDs=remove_outer_arrays(matfile['ID1'])
+        IDs=matfile['ID1']
         datasets[filename][trace] = {
             recording_type: recording, 'ID1': IDs}
 
