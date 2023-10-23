@@ -2,9 +2,35 @@
 import numpy as np
 import pandas as pd
 import copy
+import dill
+import os
 
 
-def get_dataframes(dictionaries, recording_type):
+def saving_as_hdf5(dataframes):
+    """This function saves the dataframes as hdf5 files"""
+
+    output_directory = "hdf5_files"
+
+    # Create the output directory if it doesn't exist
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory)
+
+    for trial, trialvalue in dataframes.items():
+        filename = os.path.join(output_directory, f"{trial}.h5")
+        trialvalue.to_hdf(filename, key='data', mode='w')
+
+    print("Dataframes stored as hdf5 files in the directory 'hdf5_files'")
+
+    return None
+
+
+def saving_as_pkl(dataframes):
+    with open('dataframes.pkl', 'wb') as file:
+        dill.dump(dataframes, file)
+    return None
+
+
+def get_dataframes(dictionaries, recording_type, save_as_hdf5):
     """This function converts the dictionary of wbstruct data into a dictionary of dataframes
 
     Args:
@@ -31,10 +57,15 @@ def get_dataframes(dictionaries, recording_type):
             ID) else ID for dummy, ID in zip(colnames, id_names)]
         datasets[trial] = pd.DataFrame(merged_datasets, columns=colnames)
 
+    if save_as_hdf5:
+        saving_as_hdf5(datasets)
+    else:
+        saving_as_pkl(datasets)
+
     return datasets
 
 
-def get_dataframes_from_excel(dictionaries, IDs, recording_type):
+def get_dataframes_from_excel(dictionaries, IDs, recording_type, save_as_hdf5):
     """This function converts the dictionary of wbstruct data into a dictionary of dataframes and 
         uses the IDs from a separate dictionary
 
@@ -49,6 +80,7 @@ def get_dataframes_from_excel(dictionaries, IDs, recording_type):
 
     dictofIDs = copy.deepcopy(IDs)
     datasets = copy.deepcopy(dictionaries)
+
 
     for trial, trialvalue in dictionaries.items():
 
@@ -86,5 +118,10 @@ def get_dataframes_from_excel(dictionaries, IDs, recording_type):
 
             datasets[trial] = pd.DataFrame(
                 merged_datasets, columns=colnames)
+
+    if save_as_hdf5:
+        saving_as_hdf5(datasets)
+    else:
+        saving_as_pkl(datasets)
 
     return datasets

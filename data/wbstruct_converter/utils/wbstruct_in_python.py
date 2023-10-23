@@ -7,6 +7,7 @@ from collections import defaultdict
 import openpyxl
 import pandas as pd
 import dill
+import numpy as np
 
 
 def contains_substring(text, substring_list):
@@ -82,7 +83,13 @@ def safe_str_contains(text, pattern):
         return False
 
 
-def get_datasets_dict(root_dir, target_file, include, exclude, recording_type):
+def remove_outer_arrays(arr):
+    while isinstance(arr, list) or len(arr)==1:
+        arr = arr[0]
+    return arr
+
+
+def get_datasets_dict(root_dir, target_file, include, exclude, recording_type, simple=True):
     """ get a dictionary of dictionaries containing the data from the matlab files and save it to a pickle file
 
     Args:
@@ -92,7 +99,7 @@ def get_datasets_dict(root_dir, target_file, include, exclude, recording_type):
         defaultdict: a dictionary of dictionaries containing the data from the matlab files
     """
 
-    datasets = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    datasets = defaultdict(lambda: defaultdict(list))
 
     print('Searching for paths')
     all_paths = find_file(root_dir, target_file, include, exclude)
@@ -108,8 +115,12 @@ def get_datasets_dict(root_dir, target_file, include, exclude, recording_type):
             filename = filename.replace("-", "")
             filename = filename.replace("_Ctrl", "")
         matfile = load_matlab_file(all_paths[index])
+        if simple:
+            matfile = matfile["simple"]
+        recording=remove_outer_arrays(matfile[recording_type])
+        IDs=remove_outer_arrays(matfile['ID1'])
         datasets[filename][trace] = {
-            recording_type: matfile["simple"][recording_type], 'ID1': matfile["simple"]['ID1']}
+            recording_type: recording, 'ID1': IDs}
 
     with open('datasets.pkl', 'wb') as file:
         dill.dump(datasets, file)
@@ -156,7 +167,17 @@ def get_IDs_dict(root_dir, target_file, include, exclude):
                     lambda x: safe_str_contains(x, pattern))
                 value = value[value['num']]
                 value = value.dropna(subset=[colname])
+                value = value[idcol].tolist()
+                IDs = []
+                seen = set()
 
-                dictofIDs[key] = value[idcol]
+                for item in value:
+                    if item in seen:
+                        IDs.append(None)
+                    else:
+                        seen.add(item)
+                        IDs.append(item)
+
+                dictofIDs[key] = IDs
 
     return dictofIDs
