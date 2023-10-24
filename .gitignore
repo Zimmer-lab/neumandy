@@ -1,2 +1,5 @@
-data/wbstruct_converter/dataframes_rebecca.pkl
-data/wbstruct_converter/dataframes_kerem.pkl
+# we do not want to push any data files to Github
+
+*.pkl
+*.h5
+*.csv
