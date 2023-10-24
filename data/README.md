@@ -1,4 +1,4 @@
-This data folder contains various data that we will run algorithms on.
+This data folder contains a tool with which the data have been obtained from the sources and currently an exporation + data wrangling notebook. It does NOT contain the actual data since there is a repo size limit.
 
 ### Data Sources 
 
