@@ -32,6 +32,11 @@ def saving_as_pkl(dataframes):
 
     return None
 
+def loading_pkl(dataframes):
+    with open(dataframes ,'rb') as f:
+        return dill.load(f)
+
+
 
 def get_dataframes(dictionaries, recording_type, save_as_hdf5=False):
     """This function converts the dictionary of wbstruct data into a dictionary of dataframes
