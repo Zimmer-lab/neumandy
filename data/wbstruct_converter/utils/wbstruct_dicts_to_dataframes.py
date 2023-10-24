@@ -32,9 +32,10 @@ def saving_as_pkl(dataframes):
 
     return None
 
+
 def loading_pkl(dataframes):
     with open(dataframes ,'rb') as f:
-        return dill.load(f)
+        return dill.load(f, ignore=False)
 
 
 
