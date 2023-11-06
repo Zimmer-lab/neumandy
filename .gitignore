@@ -4,7 +4,7 @@
 *.h5
 *.csv
 
-# is a temporary folder for data files that are not pushed to Github
-
+# scratch is a temporary folder for scratchbooks that are not pushed to Github
 data/scratch/*
 
+__pycache__/
