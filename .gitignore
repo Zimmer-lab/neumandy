@@ -3,3 +3,8 @@
 *.pkl
 *.h5
 *.csv
+
+# is a temporary folder for data files that are not pushed to Github
+
+data/scratch/*
+
