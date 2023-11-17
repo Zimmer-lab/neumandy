@@ -36,5 +36,15 @@ Following utility is used to convert MATLAB data to a python readable format. It
     - "deltaFOverF" (the normalized fluorescent values)
     - "ID1" (the IDs) 
 
+### **How to use this tool:**
+
+Execute wbstruct_converter.sh via 
+
+```. wbstruct_converter.sh```
+
+and follow the commands.
+
+
+
 
 *Note: Keep in mind that this has not been thoroughly tested and might not work for all cases. If you encounter any problems please open an issue.*
