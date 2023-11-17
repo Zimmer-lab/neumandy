@@ -20,7 +20,7 @@ def contains_substring(text, substring_list):
     """
 
     for substring in substring_list:
-        if substring in text:
+        if substring.lower() in text.lower():
             return True
     return False
 
@@ -38,11 +38,19 @@ def find_file(root_dir, target_file, include, exclude):
     Returns:
         list: list of paths to the files that match the criteria
     """
+    
+    if os.name == 'nt':  # 'nt' indicates Windows
+        root_dir = root_dir.replace('\\', '\\\\')
     found_files = []
     for root, dirs, files in os.walk(root_dir):
         for f in files:
-            if f.endswith(target_file) and contains_substring(root, include) and not contains_substring(root+f, exclude):
+            if any(exclude):
+                check = contains_substring(root, include) and not contains_substring(root+f, exclude)
+            else:
+                check = contains_substring(root, include)
+            if f.endswith(target_file) and check:
                 found_files.append(os.path.join(root, f))
+
     return found_files
 
 
@@ -100,30 +108,58 @@ def get_datasets_dict(root_dir, target_file, include, exclude, recording_type, s
     datasets = defaultdict(lambda: defaultdict(list))
 
     print('Searching for paths')
-    all_paths = find_file(root_dir, target_file, include, exclude)
+    found_paths = find_file(root_dir, target_file, include, exclude)
+    all_paths = [path for path in found_paths if "Quant" in path]
     print('Found {} paths'.format(len(all_paths)))
+    
+    with_traces = False
 
     for index in tqdm(range(len(all_paths)), desc="Loading Files"):
+        
+        # strip the path to the file from the root directory and the target file to get key names
         clean_path = all_paths[index].replace(root_dir+"\\", "")
         clean_path = clean_path.replace("\\Quant\\"+target_file, "")
+        clean_path = clean_path.replace(root_dir, "")
         splitted_path = clean_path.split("\\")
-        trace = splitted_path[-1]
-        filename = splitted_path[-2]
+        
+        # check if the path contains the traces "head" or "tail" for merging later
+        with_traces = any(include) and contains_substring("head", include)
+        
+        if with_traces:
+            trace = splitted_path[-1]
+            filename = splitted_path[-2]
+        else:
+            filename = splitted_path[-1]
+            
         if "-" in filename:
             filename = filename.replace("-", "")
             filename = filename.replace("_Ctrl", "")
+            
+        # load the matlab file and get the data
         matfile = load_matlab_file(all_paths[index])
+        
         if simple:
             matfile = matfile["simple"]
-        recording=remove_outer_arrays(matfile[recording_type])
+            
+        try:
+            recording=remove_outer_arrays(matfile[recording_type])
+        except KeyError:
+            print("'{}' not found in file".format(recording_type))
+            continue
+        
         IDs=matfile['ID1']
-        datasets[filename][trace] = {
-            recording_type: recording, 'ID1': IDs}
+        
+        if with_traces:
+            datasets[filename][trace] = {
+                recording_type: recording, 'ID1': IDs}
+        else:
+            datasets[filename] = {
+                recording_type: recording, 'ID1': IDs}
 
     with open('datasets.pkl', 'wb') as file:
         dill.dump(datasets, file)
 
-    return datasets
+    return datasets, with_traces
 
 
 
