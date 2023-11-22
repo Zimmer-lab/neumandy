@@ -3,8 +3,12 @@
 *.pkl
 *.h5
 *.csv
+*.html
 
 # scratch is a temporary folder for scratchbooks that are not pushed to Github
 data/scratch/*
 
 __pycache__/
+
+data/wbstruct_converter/utils/__pycache__/
+data/wbstruct_converter/utils/__pycache__/wbstruct_dicts_to_dataframes.cpython-310.pyc

@@ -4,7 +4,7 @@ import pandas as pd
 import copy
 import dill
 import os
-import wbstruct_to_dicts as wbstruct_dictionaries
+from wbstruct_converter.utils import wbstruct_to_dicts as wbstruct_dictionaries
 
 
 def saving_as_hdf5(dataframes):
