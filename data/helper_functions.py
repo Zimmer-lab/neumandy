@@ -1,8 +1,33 @@
 from collections import Counter, defaultdict
 from matplotlib import pyplot as plt
 import numpy as np
+import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import KFold, cross_val_score
+import sys
+import textwrap
+import wbstruct_converter.utils.wbstruct_dicts_to_dataframes as wbstruct_dataframes
+from wbstruct_converter import utils
+from sklearn.decomposition import FastICA
+import dill 
+import importlib
+
+#for wrapping outputs
+wrapper = textwrap.TextWrapper(width=50)
+
+#for loading the pkl objects we need to import the module
+sys.modules['utils'] = utils
+
+sys.path.append('C:\\Users\\LAK\\Documents\\lianaforks\\dev\\wbfm')
+import wbfm.utils.general.postprocessing.utils_imputation as utils_imputation
+import wbfm.utils.visualization.plot_traces as plot_traces
+import wbfm.utils.general.utils_behavior_annotation as behavior_annotation
+
+importlib.reload(plot_traces)
+
+import wbfm.utils.general.postprocessing.utils_imputation as utils_imputation
+import wbfm.utils.visualization.plot_traces as plot_traces
+import wbfm.utils.general.utils_behavior_annotation as behavior_annotation
 
 
 def get_num_rows_columns(dataframe):
@@ -170,5 +195,98 @@ def get_R2_predictions(dataframes, all_IDed_neurons):
         avg_r2[neuron] = rsquareds[neuron]/all_IDed_neurons[neuron]
         
     return avg_r2, predictions, raw_data
+
+
+def plot_from_stacked_imputed(length_dict, stacked_dataframe, imputed_dataframe, saving_path):
+    """plots the stacked and imputed dataframes and saves the plots
+
+    Args:
+        length_dict (dict): dictionary of the number of observations per dataset
+        stacked_dataframe (pd.DataFrame): dataframe of the stacked data
+        imputed_dataframe (pd.DataFrame): dataframe of the imputed data
+        saving_path (str): path to save the plots
+    """    
+    
+    start_index = 0
+    count = 0
+
+    # we will unstack the dataframe and plot the traces for each dataset
+    for obs_count in list(length_dict.values()):
+
+
+        # we take the number of observations from the length dictionary and add it to the start index
+        end_index = start_index + obs_count
+        df_imputed = imputed_dataframe.iloc[start_index:end_index]
+        df_unimputed = stacked_dataframe.iloc[start_index:end_index]
+
+        # 2 dataframe grid plots, imputed in blue (first argument, such that it is in the back) and unimputed in orange (second argument, on top)
+        fig = plot_traces.make_grid_plot_from_two_dataframes(df_imputed, df_unimputed)
+        #fig, ax = plot_traces.make_grid_plot_from_dataframe(df_imputed)
+
+        # save all plots in a folder
+        pathname = saving_path + list(length_dict.keys())[count] + ".png"
+        fig.savefig(pathname)
+        plt.close(fig)
+        start_index = end_index
+        count += 1
         
         
+def plot_from_single_imputed(raw_data, predictions, delta_path, model_path, plot_kwargs):
+    """plots the raw data against the predictions and the delta between the two and saves the plots
+
+    Args:
+        raw_data (defaultdict): dataframe of the raw data
+        predictions (defaultdict): dictionary of neurons and their predictions
+        delta_path (str): path to save the delta plots
+        model_path (str): path to save the model plots
+        **plot_kwargs: additional arguments for the plot
+    """    
+    
+    
+    modelled_activity_patterns = defaultdict()
+
+    for neuron, df in predictions.items():
+        raw_neuron = list(raw_data[neuron].values())
+        modelled_neuron = list(df.values())
+        diff = [raw_neuron[i]-modelled_neuron[i] for i in range(len(raw_neuron))]
+        
+        modelled_activity_patterns[neuron] = pd.DataFrame(modelled_neuron).T
+
+        # Calculate the number of rows and columns for subplots
+        num_rows, num_cols = get_num_rows_columns(modelled_activity_patterns[neuron])
+        
+        figsample, ax = plt.subplots(num_rows, num_cols, figsize=(12, 8))
+
+        # create delta figures
+        fig_delta, ax = plot_traces.make_grid_plot_from_dataframe(pd.DataFrame(diff).T, fig=figsample)
+        fig_delta.savefig(delta_path+neuron+".png")
+        
+        # clear figure
+        plt.cla()
+
+        figsample, ax = plt.subplots(num_rows, num_cols, figsize=(12, 8))
+
+        fig, ax = plot_traces.make_grid_plot_from_dataframe(
+            modelled_activity_patterns[neuron], fig=figsample)
+
+        fig, ax = plot_traces.make_grid_plot_from_dataframe(pd.DataFrame(raw_neuron).T, fig=fig, twinx_when_reusing_figure=True,**plot_kwargs)
+
+        # save all plots in a folder
+        fig.savefig(model_path+neuron+".png")
+
+        
+def find_percent(data, min_value):
+    """calculates the percentile of a value in a list
+
+    Args:
+        data (list): list of values
+        min_value (float): value for which the percentile is calculated
+
+    Returns:
+        percent: percentile of the value
+    """    
+    sorted_data = sorted(data)
+    rank = sorted_data.index(min_value) + 1
+    total_points = len(sorted_data)
+    percent = 100 - ((rank - 0.5) / total_points) * 100
+    return percent
