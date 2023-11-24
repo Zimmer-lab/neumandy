@@ -12,3 +12,4 @@ __pycache__/
 
 data/wbstruct_converter/utils/__pycache__/
 data/wbstruct_converter/utils/__pycache__/wbstruct_dicts_to_dataframes.cpython-310.pyc
+*-checkpoint.ipynb
