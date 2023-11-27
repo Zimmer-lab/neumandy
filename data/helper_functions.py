@@ -15,6 +15,9 @@ import sys
 import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
+from scipy.spatial.distance import mahalanobis
+from scipy.stats import chi2
+
 
 # for loading the pkl objects we need to import the module
 sys.modules['utils'] = utils
@@ -357,3 +360,48 @@ def get_behavioural_states(dataframe):
     turn_vec.replace(0, 'forward', inplace=True)
 
     return turn_vec
+
+
+def get_LLO_PCAs(dataframe, n_components=3):
+    """calculates the PCA loadings for each neuron using leave one out cross validation
+
+    Args:
+        dataframe (pd.DataFrame): dataframe of the data
+        n_components (int, optional): number of PCA components. Defaults to 3.
+
+    Returns:
+        pca_all_splits (defaultdict): dictionary of the PCA loadings for each neuron
+    """
+
+    loo = LeaveOneOut()
+    pca_all_splits = defaultdict(list)
+
+    # 73 iterations are done because we have 73 neurons
+    for train_index, test_index in loo.split(dataframe):
+        X_train = dataframe.iloc[train_index]
+
+        # Fit the PCA model on the training data
+        pca = PCA(n_components=n_components)
+        pca_neuron_loo = pca.fit_transform(X_train)
+
+        # Retrieve and store the PCA loadings of the first component as a DataFrame
+        for i in range(n_components):
+            variable_name = f"pca{i+1}_all_splits"
+            pca_df_loo = pd.DataFrame(pca_neuron_loo[:, i])
+            pca_df_loo["neuron"] = X_train.index
+            pca_df_loo = pca_df_loo.rename(columns={0: 'Mode {}'.format(i+1)})
+            pca_all_splits[variable_name].append(pca_df_loo)
+
+    return pca_all_splits
+
+
+def get_mahalanobis_distances(dataframe):
+    # computing the covariance which is important for the mahalanobis distance
+
+    cov_matrix = dataframe.cov()
+    # compute inverse of covariance matrix
+    inv_cov_matrix = np.linalg.inv(cov_matrix)
+    mean_predictors = np.mean(dataframe, axis=0)
+    mahalanobis_distances = [mahalanobis(obs[1], mean_predictors, inv_cov_matrix) for obs in dataframe
+                             .iterrows()]
+    return mahalanobis_distances
