@@ -24,6 +24,7 @@ def saving_as_hdf5(dataframes):
 
     return None
 
+
 def saving_as_csv(dataframes):
     """This function saves the dataframes as csv files"""
 
@@ -42,21 +43,20 @@ def saving_as_csv(dataframes):
     return None
 
 
-def saving_as_pkl(dataframes):
-    with open('dataframes.pkl', 'wb') as file:
+def saving_as_pkl(dataframes, filename):
+    with open(filename, 'wb') as file:
         dill.dump(dataframes, file)
-    
+
     print("Dataframes stored as a .pkl file. Refer to documentation to load the file.")
 
     return None
 
 
 def loading_pkl(dataframes):
-    with open(dataframes ,'rb') as f:
+    with open(dataframes, 'rb') as f:
         return dill.load(f, ignore=False)
-    
-    
-    
+
+
 def flatten_and_replace_none(arr):
     """flattens a numpy array and replaces None values with np.nan
 
@@ -65,8 +65,8 @@ def flatten_and_replace_none(arr):
 
     Returns:
         list: a list of values
-    """    
-    
+    """
+
     if isinstance(arr, np.ndarray):
         if arr.size == 0:
             return None
@@ -78,9 +78,8 @@ def flatten_and_replace_none(arr):
         return [flatten_and_replace_none(item) for item in arr.flatten()]
     else:
         return arr.tolist()
-    
-    
-    
+
+
 def get_values(valuelist):
     """converts an object to a list and flattens it if it is a numpy array
 
@@ -89,7 +88,7 @@ def get_values(valuelist):
 
     Returns:
         list: a list of values
-    """    
+    """
     try:
         assert type(valuelist) == list
         return valuelist
@@ -97,8 +96,6 @@ def get_values(valuelist):
         if type(valuelist) == np.ndarray:
             valuelist = flatten_and_replace_none(valuelist)
             return valuelist
-    
-
 
 
 def get_dataframes(dictionaries, recording_type, with_2_traces, save_as='pkl'):
@@ -117,19 +114,20 @@ def get_dataframes(dictionaries, recording_type, with_2_traces, save_as='pkl'):
     for trial, trialvalue in dictionaries.items():
 
         # merging head and tail data
-        
+
         if with_2_traces:
-        
+
             trialkeys = list(trialvalue.keys())
-            
+
             trialdf = np.hstack(
                 (trialvalue[trialkeys[0]][recording_type], trialvalue[trialkeys[1]][recording_type]))
-            
-            id_names = get_values(trialvalue[trialkeys[0]]["ID1"]) + get_values(trialvalue[trialkeys[1]]["ID1"])
+
+            id_names = get_values(
+                trialvalue[trialkeys[0]]["ID1"]) + get_values(trialvalue[trialkeys[1]]["ID1"])
         else:
             trialdf = trialvalue[recording_type]
             id_names = get_values(trialvalue["ID1"])
-            
+
         id_length = trialdf.shape[1]
         colnames = [f"neuron_{i:03d}" for i in range(id_length)]
         colnames = [dummy if pd.isna(
@@ -161,7 +159,6 @@ def get_dataframes_from_excel(dictionaries, IDs, recording_type, save_as='pkl'):
 
     dictofIDs = copy.deepcopy(IDs)
     datasets = copy.deepcopy(dictionaries)
-
 
     for trial, trialvalue in dictionaries.items():
 

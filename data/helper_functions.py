@@ -298,7 +298,7 @@ def find_percent(data, min_value):
 
 
 def get_behavioural_states(dataframe):
-    """taken from wbfm and modified to return the behavioural states from a dataframe and not from a project
+    """taken from wbfm function @approximate_turn_annotations_using_ids and modified to return the behavioural states from a dataframe and not from a project
 
     Args:
         dataframe (pd.DataFrame): dataframe of the data
