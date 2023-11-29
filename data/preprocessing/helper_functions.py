@@ -1,3 +1,9 @@
+import os
+import sys
+current_directory = os.getcwd()  # NOQA
+parent_directory = os.path.join(current_directory, '..')  # NOQA
+sys.path.append(parent_directory)  # NOQA
+
 import importlib
 import dill
 from sklearn.decomposition import FastICA, PCA
@@ -11,7 +17,6 @@ import numpy as np
 from matplotlib import pyplot as plt
 from collections import Counter, defaultdict
 from sklearn.model_selection import LeaveOneOut
-import sys
 import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
