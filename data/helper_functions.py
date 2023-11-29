@@ -405,3 +405,23 @@ def get_mahalanobis_distances(dataframe):
     mahalanobis_distances = [mahalanobis(obs[1], mean_predictors, inv_cov_matrix) for obs in dataframe
                              .iterrows()]
     return mahalanobis_distances
+
+
+def plot_PCs(dataframe, turn_vec, filename):
+    plotly_pca, names = utils_plot_traces.modify_dataframe_to_allow_gaps_for_plotly(
+        dataframe, [0, 1, 2], 'state')
+    state_codes = turn_vec.unique()
+    phase_plot_list = []
+    for i, state_code in enumerate(state_codes):
+        phase_plot_list.append(
+            go.Scatter3d(x=plotly_pca[names[0][i]], y=plotly_pca[names[1][i]], z=plotly_pca[names[2][i]], mode="lines",
+                         name=state_code))
+
+    fig = go.Figure()
+    fig.add_traces(phase_plot_list)
+    fig.update_layout(scene=dict(
+        xaxis_title='Mode 1',
+        yaxis_title='Mode 2',
+        zaxis_title='Mode 3'))
+    fig.write_html(filename)
+    fig.show()
