@@ -33,6 +33,7 @@ import wbfm.utils.general.utils_behavior_annotation as behavior_annotation  # NO
 import wbfm.utils.general.postprocessing.utils_imputation as utils_imputation  # NOQA
 import wbfm.utils.visualization.plot_traces as plot_traces  # NOQA
 import wbfm.utils.visualization.utils_plot_traces as utils_plot_traces  # NOQA
+import wbfm.utils.neuron_matching.utils_gaussian_process as ugp  # NOQA
 
 # for wrapping outputs
 wrapper = textwrap.TextWrapper(width=50)
