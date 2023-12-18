@@ -1,5 +1,8 @@
+import imp
 import os
 import sys
+
+from scipy import stats
 current_directory = os.getcwd()  # NOQA
 parent_directory = os.path.join(current_directory, '..')  # NOQA
 sys.path.append(parent_directory)  # NOQA
@@ -12,11 +15,13 @@ import wbstruct_converter.utils.wbstruct_dicts_to_dataframes as wbstruct_datafra
 import textwrap
 from sklearn.model_selection import KFold, cross_val_score
 from sklearn.linear_model import LinearRegression
+from sklearn.cross_decomposition import PLSRegression
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 from collections import Counter, defaultdict
 from sklearn.model_selection import LeaveOneOut
+from sklearn.inspection import permutation_importance
 import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
@@ -162,6 +167,7 @@ def get_R2_predictions(dataframes, all_IDed_neurons):
     rsquareds = defaultdict()
     raw_data = defaultdict(lambda: defaultdict(list))
     predictions = defaultdict(lambda: defaultdict(list))
+    top_predictors = defaultdict(lambda: defaultdict(list))
     threshold = 10
     avg_r2 = defaultdict()
 
@@ -180,11 +186,26 @@ def get_R2_predictions(dataframes, all_IDed_neurons):
             X = dataframe.drop(columns=[neuron])
 
             # train a simple linear regression model and get the r^2 score and prediction of the neuron
-            model = LinearRegression().fit(X, y)
+            model = PLSRegression().fit(X, y)
 
             # quantify how good the model is by looking at the R2 values in a cross-validated fashion
             scores = cross_val_score(model, X, y, scoring='r2',
                                      cv=cv, n_jobs=-1)
+
+            # Get loadings and scores
+            loadings = model.x_loadings_
+            scores = model.x_scores_
+
+            # Calculate VIP scores
+            d = 2  # number of PLSR components
+            VIP_scores = np.sqrt(np.sum(
+                (loadings**2) * np.tile(np.sum(scores**2, axis=0), (X.shape[1], 1)), axis=1))
+
+            # Sum VIP scores across components
+            total_VIP = np.sum(VIP_scores)
+
+            # Normalize VIP scores (optional)
+            normalized_VIP = VIP_scores / d
 
             rsquare = np.mean(scores)
 
@@ -196,13 +217,40 @@ def get_R2_predictions(dataframes, all_IDed_neurons):
             # store the prediction of the neuron in a dictionary
             prediction = model.predict(X)
             predictions[neuron][key] = prediction
+            # newX = np.append(np.ones((len(X), 1)), X, axis=1)
+            # MSE = (sum((y-prediction)**2))/(len(newX)-len(newX[0]))
+
+            # var_b = MSE*(np.linalg.inv(np.dot(newX.T, newX)).diagonal())
+            # sd_b = np.sqrt(var_b)
+            # params = np.append(model.intercept_, model.coef_)
+            # ts_b = params / sd_b
+
+            # p_values = np.array([
+            #    2*(1-stats.t.cdf(np.abs(i), (len(newX)-len(newX[0])))) for i in ts_b])
+
+            # top_p_values = p_values[1:].argsort()[::-1][:5]
+            # top_5_predictors = [(list(X.columns)[i], p_values[i])
+            #                    for i in top_p_values]
+
+            top_VIPs = normalized_VIP.argsort()[::-1][:5]
+            top_5_predictors = [(list(X.columns)[i], normalized_VIP[i])
+                                for i in top_VIPs]
+            for i in range(len(top_5_predictors)):
+                predictor = top_5_predictors[i][0]
+                if predictor in top_predictors[neuron]:
+                    top_predictors[neuron][predictor].append(
+                        top_5_predictors[i][1])
+                else:
+                    top_predictors[neuron][predictor] = [
+                        top_5_predictors[i][1]]
+
             raw_data[neuron][key] = np.array(y)
 
     # averaging the R2 scores over all datasets
     for neuron in rsquareds:
         avg_r2[neuron] = rsquareds[neuron]/all_IDed_neurons[neuron]
 
-    return avg_r2, predictions, raw_data
+    return avg_r2, predictions, top_predictors, raw_data
 
 
 def plot_from_stacked_imputed(length_dict, stacked_dataframe, imputed_dataframe, saving_path):
