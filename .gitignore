@@ -4,6 +4,7 @@
 *.h5
 *.csv
 *.html
+*.png
 
 # scratch is a temporary folder for scratchbooks that are not pushed to Github
 data/scratch/*

@@ -151,6 +151,30 @@ def visualize_IDs(dictionary, title, xlabel, ylabel, coloring="tab:orange", disp
     return fig, ax
 
 
+def vip(model):
+    """calculates the VIP scores of a PLSR model as described on github in a scikit-learn thread: https://github.com/scikit-learn/scikit-learn/issues/7050#issuecomment-345208503
+
+    Args:
+        model (PLSRegression): PLSR model
+
+    Returns:
+        list: VIP scores
+    """
+
+    t = model.x_scores_
+    w = model.x_weights_
+    q = model.y_loadings_
+    p, h = w.shape
+    vips = np.zeros((p,))
+    s = np.diag(t.T @ t @ q.T @ q).reshape(h, -1)
+    total_s = np.sum(s)
+    for i in range(p):
+        weight = np.array(
+            [(w[i, j] / np.linalg.norm(w[:, j]))**2 for j in range(h)])
+        vips[i] = np.sqrt(p*(s.T @ weight)/total_s)
+    return vips
+
+
 def get_R2_predictions(dataframes, all_IDed_neurons):
     """calculates the R2 scores of each neuron and the predictions of each neuron
 
@@ -184,30 +208,15 @@ def get_R2_predictions(dataframes, all_IDed_neurons):
             # y is our response variable, X is our explanatory variable
             y = dataframe[neuron]
             X = dataframe.drop(columns=[neuron])
+            N = 3  # number of components to use for PLSR
 
             # train a simple linear regression model and get the r^2 score and prediction of the neuron
-            model = PLSRegression().fit(X, y)
+            model = PLSRegression(n_components=N).fit(X, y)
 
             # quantify how good the model is by looking at the R2 values in a cross-validated fashion
-            scores = cross_val_score(model, X, y, scoring='r2',
-                                     cv=cv, n_jobs=-1)
-
-            # Get loadings and scores
-            loadings = model.x_loadings_
-            scores = model.x_scores_
-
-            # Calculate VIP scores
-            d = 2  # number of PLSR components
-            VIP_scores = np.sqrt(np.sum(
-                (loadings**2) * np.tile(np.sum(scores**2, axis=0), (X.shape[1], 1)), axis=1))
-
-            # Sum VIP scores across components
-            total_VIP = np.sum(VIP_scores)
-
-            # Normalize VIP scores (optional)
-            normalized_VIP = VIP_scores / d
-
-            rsquare = np.mean(scores)
+            r2s = cross_val_score(model, X, y, scoring='r2',
+                                  cv=cv, n_jobs=-1)
+            rsquare = np.mean(r2s)
 
             if neuron in rsquareds:
                 rsquareds[neuron] += rsquare
@@ -217,33 +226,34 @@ def get_R2_predictions(dataframes, all_IDed_neurons):
             # store the prediction of the neuron in a dictionary
             prediction = model.predict(X)
             predictions[neuron][key] = prediction
-            # newX = np.append(np.ones((len(X), 1)), X, axis=1)
-            # MSE = (sum((y-prediction)**2))/(len(newX)-len(newX[0]))
 
-            # var_b = MSE*(np.linalg.inv(np.dot(newX.T, newX)).diagonal())
-            # sd_b = np.sqrt(var_b)
-            # params = np.append(model.intercept_, model.coef_)
-            # ts_b = params / sd_b
+            # Calculate VIP scores
+            VIP_scores = vip(model)
+            predictors = [(list(X.columns)[i], VIP_scores[i])
+                          for i in VIP_scores.argsort()[::-1]]
 
-            # p_values = np.array([
-            #    2*(1-stats.t.cdf(np.abs(i), (len(newX)-len(newX[0])))) for i in ts_b])
-
-            # top_p_values = p_values[1:].argsort()[::-1][:5]
-            # top_5_predictors = [(list(X.columns)[i], p_values[i])
-            #                    for i in top_p_values]
-
-            top_VIPs = normalized_VIP.argsort()[::-1][:5]
-            top_5_predictors = [(list(X.columns)[i], normalized_VIP[i])
+            top_VIPs = VIP_scores.argsort()[::-1][:5]
+            top_5_predictors = [(list(X.columns)[i], VIP_scores[i])
                                 for i in top_VIPs]
-            for i in range(len(top_5_predictors)):
-                predictor = top_5_predictors[i][0]
+            # for i in range(len(top_5_predictors)):
+            #    predictor = top_5_predictors[i][0]
+            #    if predictor in top_predictors[neuron]:
+            #        top_predictors[neuron][predictor].append(
+            #            top_5_predictors[i][1])
+            #    else:
+            #        top_predictors[neuron][predictor] = [
+            #            top_5_predictors[i][1]]
+
+            for i in range(len(predictors)):
+                predictor = predictors[i][0]
                 if predictor in top_predictors[neuron]:
                     top_predictors[neuron][predictor].append(
-                        top_5_predictors[i][1])
+                        predictors[i][1])
                 else:
                     top_predictors[neuron][predictor] = [
-                        top_5_predictors[i][1]]
+                        predictors[i][1]]
 
+            # add the raw data to a dictionary
             raw_data[neuron][key] = np.array(y)
 
     # averaging the R2 scores over all datasets
