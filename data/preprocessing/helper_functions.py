@@ -1,8 +1,12 @@
 import imp
 import os
 import sys
-
+from cv2 import norm
+import imageio
+from matplotlib.ticker import MaxNLocator
+import pynumdiff as pdiff
 from scipy import stats
+from sklearn.preprocessing import RobustScaler
 current_directory = os.getcwd()  # NOQA
 parent_directory = os.path.join(current_directory, '..')  # NOQA
 sys.path.append(parent_directory)  # NOQA
@@ -42,6 +46,149 @@ import wbfm.utils.neuron_matching.utils_gaussian_process as ugp  # NOQA
 
 # for wrapping outputs
 wrapper = textwrap.TextWrapper(width=50)
+
+
+def interpolate(vector, indices):
+    """interpolates a vector to a certain length
+
+    Args:
+        vector (list): list of values
+        indices (list): list of indices
+
+    Returns:
+        vector: interpolated vector
+    """
+    vector = np.interp(indices, np.linspace(0, 1, len(vector)), vector)
+    return vector
+
+
+def resample(stacked_dataframe, lengths, absolute_frames=3529):
+    """resamples the data to the same length
+
+    Args:
+        stacked_dataframe (): dataframe of the stacked data
+        length_dict (): dictionary of the number of observations per dataset
+        absolute_frames (int, optional): _description_. Defaults to 3529.
+
+    Returns:
+        _type_: _description_
+    """
+
+    # we will unstack the dataframe and plot the traces for each dataset
+    start_index = 0
+    resampled_dataframes = []
+
+    for obs_count in lengths:
+
+        # we take the number of observations from the length dictionary and add it to the start index
+        end_index = start_index + obs_count
+        df = stacked_dataframe.iloc[start_index:end_index]
+
+        # we interpolate the data to the same length
+        indices = np.linspace(0, 1, absolute_frames)
+        df = df.apply(interpolate, args=(indices,))
+
+        # we add the interpolated dataframe
+        resampled_dataframes.append(df)
+
+        start_index = end_index
+
+    resampled_dataframe = pd.concat(
+        resampled_dataframes, axis=0, ignore_index=True)
+
+    return resampled_dataframe
+
+
+def truncate(stacked_dataframe, lengths, n=100):
+    """truncates the first and the last n frames of the data
+
+    Args:
+        stacked_dataframe (pd.DataFrame): dataframe of the stacked data
+        lengths (dict): dictionary of the number of observations per dataset
+        n (int, optional): _description_. Defaults to 100.
+
+    Returns:
+        truncated_dataframe (pd.DataFrame): truncated dataframe
+    """
+
+    # we will unstack the dataframe and plot the traces for each dataset
+    start_index = 0
+    truncated_dataframes = []
+
+    for obs_count in lengths:
+
+        end_index = start_index + obs_count
+        df = stacked_dataframe.iloc[start_index+n:end_index-n]
+
+        # we replace the dataframe with the interpolated dataframe
+        truncated_dataframes.append(df)
+
+        start_index = end_index
+
+    truncated_dataframe = pd.concat(
+        truncated_dataframes, axis=0, ignore_index=True)
+
+    return truncated_dataframe
+
+
+def compute_derivatives(dataframe, length_dict, iterations=1, gamma=0.01, dt=1/3):
+    """computes the derivatives of the data
+
+    Args:
+        dataframe (pd.DataFrame): dataframe of the data
+
+    Returns:
+        dataframe (pd.DataFrame): dataframe of the data with derivatives
+    """
+
+    resampled_derivatives = dataframe.copy()
+
+    start_index = 0
+    # we compute the derivatives of the data
+    for obs_count in length_dict.values():
+        end_index = start_index + obs_count
+        for col_index in range(len(dataframe.columns)):
+            # x_hat: estimated (smoothed) x, dxdt_hat: estimated dx/dt, [1, 0.0001]: regularization parameters -> gamma=0.2 is too high, derivatives become too blocky
+            x_hat, dxdt_hat = pdiff.total_variation_regularization.iterative_velocity(
+                resampled_derivatives.iloc[start_index:end_index, col_index], dt, [iterations, gamma])
+            resampled_derivatives.iloc[start_index:end_index,
+                                       col_index] = dxdt_hat
+        start_index = end_index
+
+    return resampled_derivatives
+
+
+def normalize_per_dataset(dataframe, lengths):
+    """normalizes the data per dataset
+
+    Args:
+        dataframe (pd.DataFrame): dataframe of the stacked data
+        lengths (dict): dictionary of the number of observations per dataset
+
+    Returns:
+        normalized_dataframe: normalized dataframe
+    """
+
+    normalized_dfs = []
+
+    start_index = 0
+    # we will unstack the dataframe and plot the traces for each dataset
+    for obs_count in lengths.values():
+
+        # we take the number of observations from the length dictionary and add it to the start index
+        end_index = start_index + obs_count
+        resampled_dataframe_df = dataframe.iloc[start_index:end_index]
+
+        robust_scaler = RobustScaler(
+            with_centering=False, with_scaling=True, quantile_range=(1, 9))
+
+        normalized_dfs.append(pd.DataFrame(robust_scaler.fit_transform(
+            resampled_dataframe_df), columns=resampled_dataframe_df.columns))
+
+        start_index = end_index
+
+    normalized_dataframe = pd.concat(normalized_dfs, ignore_index=True)
+    return normalized_dataframe
 
 
 def get_num_rows_columns(dataframe):
@@ -139,6 +286,60 @@ def visualize_IDs(dictionary, title, xlabel, ylabel, coloring="tab:orange", disp
         step = len(dict_values) // 10
         # Use slicing to get 10 equidistant values from the list of y-values
         ax.set_yticks(dict_values[::step])
+    ax.set_xticks(x_positions)
+    # Adjust rotation and alignment as needed
+    ax.set_xticklabels(dict_keys, rotation=90)
+
+    # Set the title and labels
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+
+    return fig, ax
+
+
+def visualize_fps(dictionary, title, xlabel, ylabel, coloring="tab:red", display_all_values=False):
+    """plots a dictionary of neurons and their values (e.g. counts) as a bar chart
+
+    Args:
+        dictionary: dictionary of neurons and their values (e.g. counts)
+        title: title of the plot
+        xlabel: label of the x-axis
+        ylabel: label of the y-axis
+        coloring: color of the bars
+        display_all_values: if True, all values are displayed on the y-axis, if False, only every 10th value is displayed
+
+    Returns:
+        fig, ax: figure and axis of the plot
+    """
+
+    dict_keys = list(dictionary.keys())
+    dict_values = [round(len(dataset)/1080, 2)
+                   for dataset in dictionary.values()]
+
+    # Create the figure and axis
+    # You can adjust the width as needed
+    fig, ax = plt.subplots(figsize=(15, 7))
+    plt.ylim(min(dict_values)-(max(dict_values)*0.05),
+             max(dict_values)+(max(dict_values)*0.05))
+
+    # Create the cumulative bar chart and add markers on top of each bar
+    ax.bar(dict_keys, dict_values,
+           color=coloring, alpha=0.7, width=0.5)
+    ax.plot(dict_keys, dict_values, marker='o',
+            color=coloring, linestyle='', label='Markers')
+
+    x_positions = [neurons_key-0.1 for neurons_key in range(len(dict_keys))]
+    # Set y-axis and x-axis labels
+    if display_all_values:
+        ax.set_yticks(dict_values)
+    else:
+        step = len(dict_values) // 10
+        # Use slicing to get 10 equidistant values from the list of y-values
+        ax.set_yticks(dict_values[::step])
+
+    plt.gca().yaxis.set_major_locator(MaxNLocator(prune='lower'))
+
     ax.set_xticks(x_positions)
     # Adjust rotation and alignment as needed
     ax.set_xticklabels(dict_keys, rotation=90)
@@ -263,13 +464,13 @@ def get_R2_predictions(dataframes, all_IDed_neurons):
     return avg_r2, predictions, top_predictors, raw_data
 
 
-def plot_from_stacked_imputed(length_dict, stacked_dataframe, imputed_dataframe, saving_path):
+def plot_from_stacked_imputed(dataset_dict, dataframe1, dataframe2, saving_path):
     """plots the stacked and imputed dataframes and saves the plots
 
     Args:
-        length_dict (dict): dictionary of the number of observations per dataset
-        stacked_dataframe (pd.DataFrame): dataframe of the stacked data
-        imputed_dataframe (pd.DataFrame): dataframe of the imputed data
+        dataset_dict (dict): dictionary of the number of observations per dataset
+        dataframe1 (pd.DataFrame): dataframe of the stacked data
+        dataframe2 (pd.DataFrame): dataframe of the imputed data
         saving_path (str): path to save the plots
     """
 
@@ -277,20 +478,20 @@ def plot_from_stacked_imputed(length_dict, stacked_dataframe, imputed_dataframe,
     count = 0
 
     # we will unstack the dataframe and plot the traces for each dataset
-    for obs_count in list(length_dict.values()):
+    for obs_count in dataset_dict.values():
 
         # we take the number of observations from the length dictionary and add it to the start index
         end_index = start_index + obs_count
-        df_imputed = imputed_dataframe.iloc[start_index:end_index]
-        df_unimputed = stacked_dataframe.iloc[start_index:end_index]
+        df_dataframe2 = dataframe2.iloc[start_index:end_index]
+        df_dataframe1 = dataframe1.iloc[start_index:end_index]
 
         # 2 dataframe grid plots, imputed in blue (first argument, such that it is in the back) and unimputed in orange (second argument, on top)
         fig = plot_traces.make_grid_plot_from_two_dataframes(
-            df_imputed, df_unimputed)
+            df_dataframe2, df_dataframe1)
         # fig, ax = plot_traces.make_grid_plot_from_dataframe(df_imputed)
 
         # save all plots in a folder
-        pathname = saving_path + list(length_dict.keys())[count] + ".png"
+        pathname = saving_path + list(dataset_dict.keys())[count] + ".png"
         fig.savefig(pathname)
         plt.close(fig)
         start_index = end_index
@@ -489,3 +690,43 @@ def plot_PCs(dataframe, turn_vec, filename):
         zaxis_title='Mode 3'))
     fig.write_html(filename)
     fig.show()
+
+
+def plot_PC_gif(dataframe, turn_vec, fn):
+    plotly_pca, names = utils_plot_traces.modify_dataframe_to_allow_gaps_for_plotly(
+        dataframe, [0, 1, 2], 'state')
+    state_codes = turn_vec.unique()
+    phase_plot_list = []
+    for i, state_code in enumerate(state_codes):
+        phase_plot_list.append(
+            go.Scatter3d(x=plotly_pca[names[0][i]], y=plotly_pca[names[1][i]], z=plotly_pca[names[2][i]], mode='lines',
+                         name=state_code))
+
+    fig = go.Figure()
+    fig.add_traces(phase_plot_list)
+    fig.update_layout(scene=dict(camera=dict(eye=dict(x=1.25, y=1.25, z=1.25)), xaxis_title='Mode 1',
+                                 yaxis_title='Mode 2',
+                                 zaxis_title='Mode 3'))
+
+    num_frames = 100  # Adjust the number of frames as needed
+
+    rotation_angles = np.linspace(0, 2 * np.pi, num_frames)
+
+    os.makedirs("frames", exist_ok=True)
+    for i, angle in enumerate(rotation_angles):
+        fig.update_layout(scene_camera_eye=dict(
+            x=np.cos(angle) * 1.25, y=np.sin(angle) * 1.25, z=1.25))
+        image_filename = os.path.join("frames", f"frame_{i:03d}.png")
+
+        # note: this requires a downgrade of the engine kaleido from 0.2.1 to 0.1.0 - pathetic, I know
+        fig.write_image(image_filename)
+
+    # create GIF out of all the different angles of the principal components
+
+    images = []
+
+    for filename in os.listdir("frames"):
+        if filename.endswith(".png"):
+            images.append(imageio.imread(os.path.join("frames", filename)))
+
+    imageio.mimsave(fn, images, duration=0.1)
