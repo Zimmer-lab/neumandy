@@ -175,7 +175,7 @@ def compute_cumsum(dataframe, length_dict):
         start_index = end_index
 
 
-def normalize_per_dataset(dataframe, lengths):
+def normalize_per_dataset(dataframe, lengths, scaler):
     """normalizes the data per dataset
 
     Args:
@@ -196,10 +196,7 @@ def normalize_per_dataset(dataframe, lengths):
         end_index = start_index + obs_count
         resampled_dataframe_df = dataframe.iloc[start_index:end_index]
 
-        robust_scaler = RobustScaler(
-            with_centering=False, with_scaling=True, quantile_range=(1, 9))
-
-        normalized_dfs.append(pd.DataFrame(robust_scaler.fit_transform(
+        normalized_dfs.append(pd.DataFrame(scaler.fit_transform(
             resampled_dataframe_df), columns=resampled_dataframe_df.columns))
 
         start_index = end_index
