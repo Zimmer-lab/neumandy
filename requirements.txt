@@ -1,0 +1,14 @@
+dill==0.3.7
+imageio==2.21.1
+mat73==0.62
+matplotlib==3.8.2
+numpy==1.23.1
+opencv_python==4.8.1.78
+pandas==1.4.3
+plotly==5.17.0
+pynumdiff==0.1.2
+scikit_learn==1.3.2
+scipy==1.9.0
+tqdm==4.64.0
+wbfm @ git+https://github.com/Zimmer-lab/wbfm.git@759f5fe6032801aaeec48c054d007f3bba6c27c2#egg=wbfm
+

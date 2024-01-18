@@ -1,6 +1,9 @@
+from curses import keyname
 import imp
 import os
+import select
 import sys
+from turtle import color
 from cv2 import norm
 import imageio
 from matplotlib.ticker import MaxNLocator
@@ -10,9 +13,10 @@ from sklearn.preprocessing import RobustScaler
 current_directory = os.getcwd()  # NOQA
 parent_directory = os.path.join(current_directory, '..')  # NOQA
 sys.path.append(parent_directory)  # NOQA
-
+from dash.dependencies import Input, Output
 import importlib
 import dill
+from ipywidgets import interact, widgets
 from sklearn.decomposition import FastICA, PCA
 from wbstruct_converter import utils
 import wbstruct_converter.utils.wbstruct_dicts_to_dataframes as wbstruct_dataframes
@@ -31,7 +35,8 @@ from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 from scipy.spatial.distance import mahalanobis
 from scipy.stats import chi2
-
+import dash
+from dash import dcc, html
 
 # for loading the pkl objects we need to import the module
 sys.modules['utils'] = utils
@@ -156,6 +161,18 @@ def compute_derivatives(dataframe, length_dict, iterations=1, gamma=0.01, dt=1/3
         start_index = end_index
 
     return resampled_derivatives
+
+
+def compute_cumsum(dataframe, length_dict):
+    start_index = 0
+    for obs_count in length_dict.values():
+        end_index = start_index + obs_count
+        for col_index in range(len(dataframe.columns)):
+            integrated = np.cumsum(
+                dataframe.iloc[start_index:end_index, col_index])
+            dataframe.iloc[start_index:end_index, col_index] = integrated + \
+                abs(integrated.min()) + 0.01
+        start_index = end_index
 
 
 def normalize_per_dataset(dataframe, lengths):
@@ -689,7 +706,122 @@ def plot_PCs(dataframe, turn_vec, filename):
         yaxis_title='Mode 2',
         zaxis_title='Mode 3'))
     fig.write_html(filename)
-    fig.show()
+    # fig.show()
+    return fig
+
+
+def plot_separately(dataframe, turn_vec, length_dict, filename):
+
+    def update_graph(selected_dataset):
+
+        end_index = selected_dataset * 3329
+        start_index = end_index - 3329
+        print(selected_dataset)
+        selected_data = dataframe[start_index:end_index]
+
+        plotly_pca, names = utils_plot_traces.modify_dataframe_to_allow_gaps_for_plotly(
+            selected_data, [0, 1, 2], 'state')
+        state_codes = turn_vec[start_index:end_index].unique()
+        phase_plot_list = []
+        for i, state_code in enumerate(state_codes):
+            phase_plot_list.append(
+                go.Scatter3d(x=plotly_pca[names[0][i]], y=plotly_pca[names[1][i]], z=plotly_pca[names[2][i]], mode="lines",
+                             name=state_code))
+
+        fig = go.Figure()
+        fig.add_traces(phase_plot_list)
+        fig.update_layout(scene=dict(
+            xaxis_title='Mode 1',
+            yaxis_title='Mode 2',
+            zaxis_title='Mode 3'))
+
+        fig.show()
+
+    # Create a slider widget
+    dataset_slider = widgets.IntSlider(
+        value=1,
+        min=1,
+        max=25,
+        step=1,
+        description='Dataset'
+    )
+
+    # Connect the slider to the update function
+    interact(update_graph, selected_dataset=dataset_slider)
+
+    # Show the initial graph
+    update_graph(1)  # You can specify the initial dataset index
+
+
+def plot_PCs_separately(datasets):
+    # datasets is a dictionary of dataframe containing the data projected to PC space
+
+    app = dash.Dash(__name__)
+
+    @app.callback(
+        Output('graph', 'figure'),
+        [Input('slider', 'value')])
+    def update_graph(selected_dataset):
+        keyname = list(datasets.keys())[selected_dataset]
+        fig = plot_PCs(datasets[keyname],
+                       datasets[keyname]['state'], "test.html")
+        return fig
+
+    app.layout = html.Div([
+        dcc.Graph(id='graph'),
+        dcc.Slider(
+            id='slider',
+            min=0,
+            max=24,
+            value=0,
+            step=1
+        )
+    ])
+
+    return app
+
+
+def plot_PCs_iteratively(datasets):
+    # datasets is a dictionary of dataframe containing the data projected to PC space
+
+    app = dash.Dash(__name__)
+    #
+    #
+    # fig =
+
+    @app.callback(
+        Output('graph', 'figure'),
+        [Input('slider', 'value')])
+    def update_graph(selected_dataset):
+
+        if selected_dataset == 1:
+            keyname = list(datasets.keys())[0]
+            df = datasets[keyname]
+            return plot_PCs(df, df['state'], "test_2.html")
+
+        else:
+            selected_datasets = []
+            for i in range(selected_dataset):
+                keyname = list(datasets.keys())[i]
+                selected_datasets.append(datasets[keyname])
+
+            df = pd.concat(selected_datasets, ignore_index=True)
+            fig = plot_PCs(df,
+                           df['state'], "test_2.html")
+            return fig
+
+    app.layout = html.Div([
+        dcc.Graph(id='graph'),
+        dcc.Slider(
+            id='slider',
+            min=1,
+            max=25,
+            value=1,
+            step=1
+        )
+    ])
+
+    return app
 
 
 def plot_PC_gif(dataframe, turn_vec, fn):
