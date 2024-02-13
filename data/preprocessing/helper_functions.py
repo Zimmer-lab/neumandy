@@ -1,53 +1,31 @@
-from curses import keyname
-import imp
 import os
-import select
 import sys
-from turtle import color
-from cv2 import norm
 import imageio
 from matplotlib.ticker import MaxNLocator
 import pynumdiff as pdiff
-from scipy import stats
-from sklearn.preprocessing import RobustScaler
 current_directory = os.getcwd()  # NOQA
 parent_directory = os.path.join(current_directory, '..')  # NOQA
 sys.path.append(parent_directory)  # NOQA
 from dash.dependencies import Input, Output
-import importlib
-import dill
-from ipywidgets import interact, widgets
-from sklearn.decomposition import FastICA, PCA
-from wbstruct_converter import utils
-import wbstruct_converter.utils.wbstruct_dicts_to_dataframes as wbstruct_dataframes
+from sklearn.decomposition import PCA
 import textwrap
 from sklearn.model_selection import KFold, cross_val_score
-from sklearn.linear_model import LinearRegression
 from sklearn.cross_decomposition import PLSRegression
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 from collections import Counter, defaultdict
 from sklearn.model_selection import LeaveOneOut
-from sklearn.inspection import permutation_importance
-import plotly.express as px
-from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 from scipy.spatial.distance import mahalanobis
-from scipy.stats import chi2
+from sklearn.ensemble import IsolationForest
 import dash
 from dash import dcc, html
 
-# for loading the pkl objects we need to import the module
-sys.modules['utils'] = utils
-
-sys.path.append('C:\\Users\\LAK\\Documents\\lianaforks\\dev\\wbfm')
 
 import wbfm.utils.general.utils_behavior_annotation as behavior_annotation  # NOQA
-import wbfm.utils.general.postprocessing.utils_imputation as utils_imputation  # NOQA
 import wbfm.utils.visualization.plot_traces as plot_traces  # NOQA
 import wbfm.utils.visualization.utils_plot_traces as utils_plot_traces  # NOQA
-import wbfm.utils.neuron_matching.utils_gaussian_process as ugp  # NOQA
 
 # for wrapping outputs
 wrapper = textwrap.TextWrapper(width=50)
@@ -67,13 +45,13 @@ def interpolate(vector, indices):
     return vector
 
 
-def resample(stacked_dataframe, lengths, absolute_frames=3529):
+def resample(dataframe, lengths, frames_num=3529):
     """resamples the data to the same length
 
     Args:
-        stacked_dataframe (): dataframe of the stacked data
+        dataframe (): dataframe of the stacked data
         length_dict (): dictionary of the number of observations per dataset
-        absolute_frames (int, optional): _description_. Defaults to 3529.
+        frames_num (int, optional): _description_. Defaults to 3529.
 
     Returns:
         _type_: _description_
@@ -82,18 +60,40 @@ def resample(stacked_dataframe, lengths, absolute_frames=3529):
     # we will unstack the dataframe and plot the traces for each dataset
     start_index = 0
     resampled_dataframes = []
+    final_indexes = []
 
     for obs_count in lengths:
 
         # we take the number of observations from the length dictionary and add it to the start index
         end_index = start_index + obs_count
-        df = stacked_dataframe.iloc[start_index:end_index]
+        df = dataframe.iloc[start_index:end_index].copy()
+        if obs_count < frames_num:
+            if "state" in df.columns:
+                # Interpolate the values between the first and last elements
+                # index of current df
+                indices = np.linspace(0, frames_num, obs_count)
+                df.index = indices
 
-        # we interpolate the data to the same length
-        indices = np.linspace(0, 1, absolute_frames)
-        df = df.apply(interpolate, args=(indices,))
+                diff = frames_num - obs_count
+                nan_data = pd.DataFrame(
+                    np.nan, index=range(diff), columns=df.columns)
+                new_indices = np.linspace(1, frames_num-1, diff)
+                nan_data.index = new_indices
+                df = pd.concat([df, nan_data])
+                df = df.sort_index().reset_index(drop=True)
+                interpolated_df = df.loc[:, ~df.columns.isin(["state", "dataset"])].interpolate(
+                    method="linear", axis=0)
+                interpolated_df["state"] = df["state"].interpolate(
+                    method="backfill", limit_direction="backward")
+                if "dataset" in df.columns:
+                    interpolated_df["dataset"] = df["dataset"].interpolate(
+                        method="backfill", limit_direction="backward")
+                df = interpolated_df
+        if obs_count > frames_num:
+            # index of current df
+            indices = np.linspace(0, obs_count-1, frames_num, dtype=int)
+            df = df.iloc[indices]
 
-        # we add the interpolated dataframe
         resampled_dataframes.append(df)
 
         start_index = end_index
@@ -104,12 +104,11 @@ def resample(stacked_dataframe, lengths, absolute_frames=3529):
     return resampled_dataframe
 
 
-def truncate(stacked_dataframe, lengths, n=100):
+def truncate(dataframe, n=100):
     """truncates the first and the last n frames of the data
 
     Args:
-        stacked_dataframe (pd.DataFrame): dataframe of the stacked data
-        lengths (dict): dictionary of the number of observations per dataset
+        dataframe (pd.DataFrame): dataframe of the stacked data
         n (int, optional): _description_. Defaults to 100.
 
     Returns:
@@ -120,10 +119,10 @@ def truncate(stacked_dataframe, lengths, n=100):
     start_index = 0
     truncated_dataframes = []
 
-    for obs_count in lengths:
+    for obs_count in dataframe.groupby("dataset").size().values:
 
         end_index = start_index + obs_count
-        df = stacked_dataframe.iloc[start_index+n:end_index-n]
+        df = dataframe.iloc[start_index+n:end_index-n]
 
         # we replace the dataframe with the interpolated dataframe
         truncated_dataframes.append(df)
@@ -180,7 +179,7 @@ def normalize_per_dataset(dataframe, lengths, scaler):
 
     Args:
         dataframe (pd.DataFrame): dataframe of the stacked data
-        lengths (dict): dictionary of the number of observations per dataset
+        lengths (list): list of the number of observations per dataset
 
     Returns:
         normalized_dataframe: normalized dataframe
@@ -190,7 +189,7 @@ def normalize_per_dataset(dataframe, lengths, scaler):
 
     start_index = 0
     # we will unstack the dataframe and plot the traces for each dataset
-    for obs_count in lengths.values():
+    for obs_count in lengths:
 
         # we take the number of observations from the length dictionary and add it to the start index
         end_index = start_index + obs_count
@@ -312,11 +311,11 @@ def visualize_IDs(dictionary, title, xlabel, ylabel, coloring="tab:orange", disp
     return fig, ax
 
 
-def visualize_fps(dictionary, title, xlabel, ylabel, coloring="tab:red", display_all_values=False):
+def visualize_fps(dataframe, title, xlabel, ylabel, coloring="tab:red", display_all_values=False):
     """plots a dictionary of neurons and their values (e.g. counts) as a bar chart
 
     Args:
-        dictionary: dictionary of neurons and their values (e.g. counts)
+        dataframe: dataframe with column 'dataset' to indicate how many time points belong to the recording
         title: title of the plot
         xlabel: label of the x-axis
         ylabel: label of the y-axis
@@ -327,9 +326,8 @@ def visualize_fps(dictionary, title, xlabel, ylabel, coloring="tab:red", display
         fig, ax: figure and axis of the plot
     """
 
-    dict_keys = list(dictionary.keys())
-    dict_values = [round(len(dataset)/1080, 2)
-                   for dataset in dictionary.values()]
+    dict_keys = list(dataframe["dataset"].unique())
+    dict_values = list(dataframe.groupby('dataset').size().values)
 
     # Create the figure and axis
     # You can adjust the width as needed
@@ -450,15 +448,6 @@ def get_R2_predictions(dataframes, all_IDed_neurons):
             top_VIPs = VIP_scores.argsort()[::-1][:5]
             top_5_predictors = [(list(X.columns)[i], VIP_scores[i])
                                 for i in top_VIPs]
-            # for i in range(len(top_5_predictors)):
-            #    predictor = top_5_predictors[i][0]
-            #    if predictor in top_predictors[neuron]:
-            #        top_predictors[neuron][predictor].append(
-            #            top_5_predictors[i][1])
-            #    else:
-            #        top_predictors[neuron][predictor] = [
-            #            top_5_predictors[i][1]]
-
             for i in range(len(predictors)):
                 predictor = predictors[i][0]
                 if predictor in top_predictors[neuron]:
@@ -478,7 +467,7 @@ def get_R2_predictions(dataframes, all_IDed_neurons):
     return avg_r2, predictions, top_predictors, raw_data
 
 
-def plot_from_stacked_imputed(dataset_dict, dataframe1, dataframe2, saving_path):
+def plot_from_stacked_imputed(dataset_dict, df1, df2, saving_path):
     """plots the stacked and imputed dataframes and saves the plots
 
     Args:
@@ -491,8 +480,16 @@ def plot_from_stacked_imputed(dataset_dict, dataframe1, dataframe2, saving_path)
     start_index = 0
     count = 0
 
+    dataframe1 = df1.copy()
+    dataframe2 = df2.copy()
+
     # we will unstack the dataframe and plot the traces for each dataset
     for obs_count in dataset_dict.values():
+
+        if "state" in dataframe1.columns:
+            dataframe1.drop(columns=["state"], inplace=True)
+        if "state" in dataframe2.columns:
+            dataframe2.drop(columns=["state"], inplace=True)
 
         # we take the number of observations from the length dictionary and add it to the start index
         end_index = start_index + obs_count
@@ -501,7 +498,7 @@ def plot_from_stacked_imputed(dataset_dict, dataframe1, dataframe2, saving_path)
 
         # 2 dataframe grid plots, imputed in blue (first argument, such that it is in the back) and unimputed in orange (second argument, on top)
         fig = plot_traces.make_grid_plot_from_two_dataframes(
-            df_dataframe2, df_dataframe1)
+            df_dataframe1, df_dataframe2, twinx_when_reusing_figure=True)
         # fig, ax = plot_traces.make_grid_plot_from_dataframe(df_imputed)
 
         # save all plots in a folder
@@ -686,15 +683,80 @@ def get_mahalanobis_distances(dataframe):
     return mahalanobis_distances
 
 
+def determine_turn(dataframe, original_turn_vec):
+    in_turn = False
+    count = 0
+    smdv = 0
+    smdd = 0
+    actual_turn_vec = original_turn_vec.copy()
+    for idx, state in enumerate(original_turn_vec):
+        if state == "turn":
+            in_turn = True
+            count = count + 1
+
+            smdvr = dataframe.loc[idx, "SMDVR"]
+            smdvl = dataframe.loc[idx, "SMDVL"]
+            smdv = smdv + (smdvr + smdvl) / 2
+
+            smddr = dataframe.loc[idx, "SMDDR"]
+            smddl = dataframe.loc[idx, "SMDDL"]
+            smdd = smdd + (smddr + smddl) / 2
+
+        else:
+            if in_turn:
+                if (smdv/count) > (smdd/count):
+                    actual_turn_vec[idx-count:idx] = "ventral"
+                else:
+                    actual_turn_vec[idx-count:idx] = "dorsal"
+                smdv = 0
+                smdd = 0
+                count = 0
+                in_turn = False
+            actual_turn_vec[idx] = state
+    return actual_turn_vec
+
+
+def apply_PCA_with_smoothing(dataframe):
+    pca = PCA(n_components=3)
+    dataframe_pca = pd.DataFrame(pca.fit_transform(dataframe.loc[:, ~dataframe.columns.isin(["state", "dataset"])]))
+    window_size = 10
+    # Applying a 10-sample sliding average for smoother visualizations!
+    for i in range(3):
+        dataframe_pca[i] = np.convolve(dataframe_pca[i], np.ones(window_size)/window_size, mode='same')
+        
+    return dataframe_pca
+
+
 def plot_PCs(dataframe, turn_vec, filename):
+    """plots the first three principal components of the data
+
+    Parameters
+    ----------
+        dataframe (pd.DataFrame): dataframe of the data
+        turn_vec (pd.Series): a series of the behavioural states
+        filename (str): filename of the plot
+
+    Returns
+    ----------
+        fig (go.Figure()): figure of the plot
+    """
+
     plotly_pca, names = utils_plot_traces.modify_dataframe_to_allow_gaps_for_plotly(
         dataframe, [0, 1, 2], 'state')
     state_codes = turn_vec.unique()
     phase_plot_list = []
+    custom_colors = {
+        'reversal': 'rgb(255,99,71)',
+        'forward': 'rgb(100,149,237)',
+        'dorsal': 'rgb(154,205,50)',
+        'ventral': 'rgb(255,215,0)',
+        'sustained reversal': 'rgb(128, 0, 32)'
+    }
+
     for i, state_code in enumerate(state_codes):
         phase_plot_list.append(
             go.Scatter3d(x=plotly_pca[names[0][i]], y=plotly_pca[names[1][i]], z=plotly_pca[names[2][i]], mode="lines",
-                         name=state_code))
+                         name=state_code, line=dict(color=custom_colors[state_code], width=3)))
 
     fig = go.Figure()
     fig.add_traces(phase_plot_list)
@@ -705,49 +767,6 @@ def plot_PCs(dataframe, turn_vec, filename):
     fig.write_html(filename)
     # fig.show()
     return fig
-
-
-def plot_separately(dataframe, turn_vec, length_dict, filename):
-
-    def update_graph(selected_dataset):
-
-        end_index = selected_dataset * 3329
-        start_index = end_index - 3329
-        print(selected_dataset)
-        selected_data = dataframe[start_index:end_index]
-
-        plotly_pca, names = utils_plot_traces.modify_dataframe_to_allow_gaps_for_plotly(
-            selected_data, [0, 1, 2], 'state')
-        state_codes = turn_vec[start_index:end_index].unique()
-        phase_plot_list = []
-        for i, state_code in enumerate(state_codes):
-            phase_plot_list.append(
-                go.Scatter3d(x=plotly_pca[names[0][i]], y=plotly_pca[names[1][i]], z=plotly_pca[names[2][i]], mode="lines",
-                             name=state_code))
-
-        fig = go.Figure()
-        fig.add_traces(phase_plot_list)
-        fig.update_layout(scene=dict(
-            xaxis_title='Mode 1',
-            yaxis_title='Mode 2',
-            zaxis_title='Mode 3'))
-
-        fig.show()
-
-    # Create a slider widget
-    dataset_slider = widgets.IntSlider(
-        value=1,
-        min=1,
-        max=25,
-        step=1,
-        description='Dataset'
-    )
-
-    # Connect the slider to the update function
-    interact(update_graph, selected_dataset=dataset_slider)
-
-    # Show the initial graph
-    update_graph(1)  # You can specify the initial dataset index
 
 
 def plot_PCs_separately(datasets):
@@ -768,9 +787,9 @@ def plot_PCs_separately(datasets):
         dcc.Graph(id='graph'),
         dcc.Slider(
             id='slider',
-            min=0,
-            max=24,
-            value=0,
+            min=1,
+            max=len(datasets.keys()),
+            value=1,
             step=1
         )
     ])
@@ -812,7 +831,7 @@ def plot_PCs_iteratively(datasets):
         dcc.Slider(
             id='slider',
             min=1,
-            max=25,
+            max=len(datasets.keys()),
             value=1,
             step=1
         )
@@ -825,11 +844,19 @@ def plot_PC_gif(dataframe, turn_vec, fn):
     plotly_pca, names = utils_plot_traces.modify_dataframe_to_allow_gaps_for_plotly(
         dataframe, [0, 1, 2], 'state')
     state_codes = turn_vec.unique()
+
+    custom_colors = {
+        'reversal': 'rgb(255,99,71)',
+        'forward': 'rgb(100,149,237)',
+        'dorsal': 'rgb(154,205,50)',
+        'ventral': 'rgb(255,215,0)',
+        'sustained reversal': 'rgb(128, 0, 32)'
+    }
     phase_plot_list = []
     for i, state_code in enumerate(state_codes):
         phase_plot_list.append(
             go.Scatter3d(x=plotly_pca[names[0][i]], y=plotly_pca[names[1][i]], z=plotly_pca[names[2][i]], mode='lines',
-                         name=state_code))
+                         name=state_code, line=dict(color=custom_colors[state_code], width=3)))
 
     fig = go.Figure()
     fig.add_traces(phase_plot_list)
@@ -859,3 +886,14 @@ def plot_PC_gif(dataframe, turn_vec, fn):
             images.append(imageio.imread(os.path.join("frames", filename)))
 
     imageio.mimsave(fn, images, duration=0.1)
+
+
+def apply_isolation_forest(X, contamination=0.025):
+    if "dataset" in X.columns:
+        X = X.drop(columns=["dataset", "state"])
+    clf = IsolationForest(n_estimators=100, max_samples='auto',
+                          contamination=contamination, warm_start=True)
+    clf.fit(X)  # fit 10 trees
+    X["outlier"] = ["outlier" if x == -
+                    1 else "no outlier" for x in clf.predict(X).tolist()]
+    return X

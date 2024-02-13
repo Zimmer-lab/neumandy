@@ -1,10 +1,10 @@
 
+from collections import defaultdict
 import numpy as np
 import pandas as pd
 import copy
 import dill
 import os
-from wbstruct_converter.utils import wbstruct_to_dicts as wbstruct_dictionaries
 
 
 def saving_as_hdf5(dataframes):
@@ -98,7 +98,7 @@ def get_values(valuelist):
             return valuelist
 
 
-def get_dataframes(dictionaries, recording_type, with_2_traces, save_as='pkl'):
+def get_dataframes(dictionaries, recording_type, with_2_traces, with_coloring=False, save_as='pkl'):
     """This function converts the dictionary of wbstruct data into a dictionary of dataframes
 
     Args:
@@ -109,21 +109,47 @@ def get_dataframes(dictionaries, recording_type, with_2_traces, save_as='pkl'):
         defaultdict: a dictionary of dataframes that contains the data from all matlab files
     """
 
-    datasets = copy.deepcopy(dictionaries)
+    datasets = defaultdict(dict)
 
     for trial, trialvalue in dictionaries.items():
-
         # merging head and tail data
 
         if with_2_traces:
 
             trialkeys = list(trialvalue.keys())
 
-            trialdf = np.hstack(
-                (trialvalue[trialkeys[0]][recording_type], trialvalue[trialkeys[1]][recording_type]))
+            if "traceColoring" in trialkeys:
+                trialkeys.remove("traceColoring")
 
-            id_names = get_values(
-                trialvalue[trialkeys[0]]["ID1"]) + get_values(trialvalue[trialkeys[1]]["ID1"])
+            if len(trialkeys) < 2:
+                break
+
+            trial1 = trialvalue[trialkeys[0]][recording_type]
+            trial2 = trialvalue[trialkeys[1]][recording_type]
+
+            if len(trial1) == 1:
+                trial1 = get_values(trial1)[0]
+
+            if len(trial2) == 1:
+                trial2 = trial2[0]
+
+            trialdf = np.hstack(
+                (trial1, trial2))
+
+            id1 = get_values(
+                trialvalue[trialkeys[0]]["ID1"])
+
+            id2 = get_values(
+                trialvalue[trialkeys[1]]["ID1"])
+
+            if len(id1) == 1:
+                id1 = get_values(id1[0])
+
+            if len(id2) == 1:
+                id2 = get_values(id2[0])
+
+            id_names = id1 + id2
+
         else:
             trialdf = trialvalue[recording_type]
             id_names = get_values(trialvalue["ID1"])
@@ -132,14 +158,20 @@ def get_dataframes(dictionaries, recording_type, with_2_traces, save_as='pkl'):
         colnames = [f"neuron_{i:03d}" for i in range(id_length)]
         colnames = [dummy if pd.isna(
             ID) else ID for dummy, ID in zip(colnames, id_names)]
-        datasets[trial] = pd.DataFrame(trialdf, columns=colnames)
+        dataframe = pd.DataFrame(trialdf, columns=colnames)
+        if with_coloring:
+            traceColors_og = trialvalue["traceColoring"]
+            if len(traceColors_og) == 1:
+                traceColors_og = get_values(traceColors_og[0])
+            dataframe["state"] = traceColors_og[:, -1]
+        datasets[trial] = dataframe
 
     if save_as == 'h5':
         saving_as_hdf5(datasets)
     elif save_as == 'csv':
         saving_as_csv(datasets)
     else:
-        saving_as_pkl(datasets)
+        saving_as_pkl(datasets, filename='dataframes.pkl')
 
     return datasets
 
