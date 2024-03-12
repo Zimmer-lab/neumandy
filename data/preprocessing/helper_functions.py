@@ -718,12 +718,14 @@ def determine_turn(dataframe, original_turn_vec):
 
 def apply_PCA_with_smoothing(dataframe):
     pca = PCA(n_components=3)
-    dataframe_pca = pd.DataFrame(pca.fit_transform(dataframe.loc[:, ~dataframe.columns.isin(["state", "dataset"])]))
+    dataframe_pca = pd.DataFrame(pca.fit_transform(
+        dataframe.loc[:, ~dataframe.columns.isin(["state", "dataset"])]))
     window_size = 10
     # Applying a 10-sample sliding average for smoother visualizations!
     for i in range(3):
-        dataframe_pca[i] = np.convolve(dataframe_pca[i], np.ones(window_size)/window_size, mode='same')
-        
+        dataframe_pca[i] = np.convolve(dataframe_pca[i], np.ones(
+            window_size)/window_size, mode='same')
+
     return dataframe_pca
 
 
