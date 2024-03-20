@@ -752,7 +752,8 @@ def plot_PCs(dataframe, filename='PCA_plot.html', variances=None):
         'forward': 'rgb(100,149,237)',
         'dorsal': 'rgb(154,205,50)',
         'ventral': 'rgb(255,215,0)',
-        'sustained reversal': 'rgb(128, 0, 32)'
+        'sustained reversal': 'rgb(128, 0, 32)',
+        'post reversal': 'rgb(130, 30, 20)'
     }
 
     for i, state_code in enumerate(state_codes):
@@ -787,8 +788,7 @@ def plot_PCs_separately(datasets):
         [Input('slider', 'value')])
     def update_graph(selected_dataset):
         keyname = list(datasets.keys())[selected_dataset]
-        fig = plot_PCs(datasets[keyname],
-                       datasets[keyname]['state'], "test.html")
+        fig = plot_PCs(datasets[keyname])
         return fig
 
     app.layout = html.Div([
@@ -821,7 +821,7 @@ def plot_PCs_iteratively(datasets):
         if selected_dataset == 1:
             keyname = list(datasets.keys())[0]
             df = datasets[keyname]
-            return plot_PCs(df, df['state'], "test_2.html")
+            return plot_PCs(df)
 
         else:
             selected_datasets = []
@@ -830,8 +830,7 @@ def plot_PCs_iteratively(datasets):
                 selected_datasets.append(datasets[keyname])
 
             df = pd.concat(selected_datasets, ignore_index=True)
-            fig = plot_PCs(df,
-                           df['state'], "test_2.html")
+            fig = plot_PCs(df)
             return fig
 
     app.layout = html.Div([
