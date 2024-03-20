@@ -729,14 +729,14 @@ def apply_PCA_with_smoothing(dataframe):
     return dataframe_pca
 
 
-def plot_PCs(dataframe, turn_vec, filename):
+def plot_PCs(dataframe, filename='PCA_plot.html', variances=None):
     """plots the first three principal components of the data
 
     Parameters
     ----------
-        dataframe (pd.DataFrame): dataframe of the data
-        turn_vec (pd.Series): a series of the behavioural states
+        dataframe (pd.DataFrame): dataframe of the data with a column of behavioural states
         filename (str): filename of the plot
+        variances (list): list of the variances explained by each principal component
 
     Returns
     ----------
@@ -745,7 +745,7 @@ def plot_PCs(dataframe, turn_vec, filename):
 
     plotly_pca, names = utils_plot_traces.modify_dataframe_to_allow_gaps_for_plotly(
         dataframe, [0, 1, 2], 'state')
-    state_codes = turn_vec.unique()
+    state_codes = dataframe['state'].unique()
     phase_plot_list = []
     custom_colors = {
         'reversal': 'rgb(255,99,71)',
@@ -762,10 +762,16 @@ def plot_PCs(dataframe, turn_vec, filename):
 
     fig = go.Figure()
     fig.add_traces(phase_plot_list)
-    fig.update_layout(scene=dict(
-        xaxis_title='Mode 1',
-        yaxis_title='Mode 2',
-        zaxis_title='Mode 3'))
+    if variances is not None:
+        scene = dict(xaxis_title=f"PC 1 ({variances[0]:.2f}%)",
+                     yaxis_title=f"PC 2 ({variances[1]:.2f}%)",
+                     zaxis_title=f"PC 3 ({variances[2]:.2f}%)")
+    else:
+        scene = dict(xaxis_title="PC 1",
+                     yaxis_title="PC 2",
+                     zaxis_title="PC 3")
+
+    fig.update_layout(scene=scene)
     fig.write_html(filename)
     # fig.show()
     return fig
