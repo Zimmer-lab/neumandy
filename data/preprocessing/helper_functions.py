@@ -756,10 +756,17 @@ def plot_PCs(dataframe, filename='PCA_plot.html', variances=None):
         'post reversal': 'rgb(130, 30, 20)'
     }
 
+    if 'dataset' in dataframe.columns:
+        text = dataframe['dataset']
+        hovertemplate = 'x:%{x}<br>y:%{y}<br>z:%{z}<br>%{text}'
+    else:
+        text = None
+        hovertemplate = 'x:%{x}<br>y:%{y}<br>z:%{z}'
+
     for i, state_code in enumerate(state_codes):
         phase_plot_list.append(
             go.Scatter3d(x=plotly_pca[names[0][i]], y=plotly_pca[names[1][i]], z=plotly_pca[names[2][i]], mode="lines",
-                         name=state_code, line=dict(color=custom_colors[state_code], width=3)))
+                         name=state_code, line=dict(color=custom_colors[state_code], width=3), hovertemplate=hovertemplate, text=text))
 
     fig = go.Figure()
     fig.add_traces(phase_plot_list)
