@@ -2,6 +2,17 @@
 
 Following utility is used to convert MATLAB data to a python readable format. It is specific to the output of the [Whole Brain Analyzer](https://github.com/Zimmer-lab/whole_brain_analyzer_MATLAB) which is a wbstruct.mat file with the variables containing the imaged neurons as continuous time series and the IDs of the neurons (e.g. AVA). 
 
+### **How to use this tool:**
+
+Execute wbstruct_converter.sh on the lisc cluster via 
+
+```. wbstruct_converter.sh```
+
+and follow the commands.
+
+This will produce a RAW data .h5 file, without any additional preprocessing beyond what the MATLAB tracker did (i.e. delta F / F).
+
+
 ### **When to use this tool:**
 
 * If the directory that contains all your recordings has following structure:
@@ -35,14 +46,6 @@ Following utility is used to convert MATLAB data to a python readable format. It
     - "simple" (which holds cleaned copies of the raw data)
     - "deltaFOverF" (the normalized fluorescent values)
     - "ID1" (the IDs) 
-
-### **How to use this tool:**
-
-Execute wbstruct_converter.sh via 
-
-```. wbstruct_converter.sh```
-
-and follow the commands.
 
 
 
