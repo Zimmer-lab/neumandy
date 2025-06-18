@@ -1,1 +1,0 @@
-This folder is to save any plots that are being created in the notebook
