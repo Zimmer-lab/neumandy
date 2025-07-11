@@ -61,7 +61,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path', type=str, default='models/')
-    parser.add_argument('--data_path', type=str, default='data.npy')
+    parser.add_argument('--data_path', type=str, default='data/data.npy')
     parser.add_argument('--epochs', type=int, default=11)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--lr', type=float, default=0.001)

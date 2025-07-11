@@ -9,7 +9,6 @@ import os
 import numpy as np
 from models import DeepDLDS
 import wandb
-import submitit
 import plotly.express as px
 import util
 import plotly.figure_factory as ff
@@ -61,7 +60,6 @@ def main(args):
     model = DeepDLDS(input_size, output_size, num_subdyn,
                      X.shape[0], softmax_temperature=0.0001)
 
-    A = np.load(args.dynamics_path)
     states = np.load(args.state_path)
     # bias = np.load(args.bias_path)
 
@@ -115,8 +113,6 @@ def main(args):
         model.parameters(), lr=args.lr)  # Adam optimizer
 
     losses = []
-
-    wandb.login(key='a79ac9d4509caa0d5e477c939a41d790e7711171')
 
     if args.eigenvalue_radius < 0.999:
         project_name = f"Oscillatory_FastDecay"
@@ -351,7 +347,7 @@ def dlds_loss(y_pred, y_true):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path', type=str, default='models/')
-    parser.add_argument('--data_path', type=str, default='data.npy')
+    parser.add_argument('--data_path', type=str, default='data/data.npy')
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--lr', type=float, default=0.001)

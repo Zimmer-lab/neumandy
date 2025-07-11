@@ -148,8 +148,6 @@ def main(args):
     # shift states for plotting according to lookback
     # states = states[lookback:]
 
-    wandb.login(key='a79ac9d4509caa0d5e477c939a41d790e7711171')
-
     if args.eigenvalue_radius < 0.999:
         project_name = f"Oscillatory_FastDecay"
     else:

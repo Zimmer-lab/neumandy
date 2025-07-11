@@ -14,9 +14,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as data
-import wandb
 from datasets import CdLDSDataGenerator
-from models import DLDSwithControl
+#from models import DLDSwithControl
 import util
 import slim
 import plotly.graph_objects as go
@@ -108,72 +107,30 @@ def main(args):
 
         num_true_subdyn = args.num_subdyn
 
-        generator = DLDSwithControl(CdLDSDataGenerator(
-            K=num_true_subdyn, D_control=args.control_size, fix_point_change=fix_point_change, eigenvalue_radius=float(eigenvalue_radius), set_seed=num_true_subdyn))
+        generator = CdLDSDataGenerator(
+            K=num_true_subdyn, D_control=args.control_size, fix_point_change=fix_point_change, eigenvalue_radius=float(eigenvalue_radius), set_seed=num_true_subdyn)
 
         time_points = 1000
 
         # generate toy data
-        timeseries = generator.datasets.generate_data(
+        timeseries = generator.generate_data(
             time_points, sigma=0.01).T
-        true_dynamics = generator.datasets.A
-        states = generator.datasets.states_
-        coefficients = generator.datasets.coefficients_
-        controls = generator.datasets.U_[:args.control_size, :]
-        B = generator.datasets.B[:, :args.control_size]
-        bias = generator.datasets.B[:, args.control_size:]
+        states = generator.states_
+        coefficients = generator.coefficients_
+        controls = generator.U_[:args.control_size, :]
 
     else:
         timeseries = np.load(args.data_path)
-        # coefficients = np.load(args.state_path)
-        # controls = np.load(args.control_path)
 
     # train-test split for time series
     train_size = int(len(timeseries) * 1.0)
-    # test_size = len(timeseries) - train_size
     train, test = timeseries[:train_size], timeseries[train_size:]
 
-    X_train = torch.tensor(train[:-1])  # .unsqueeze(0)
-    y_train = torch.tensor(train[1:])  # .unsqueeze(0)
-
-    # X_test = torch.tensor(test[:-1])  # .unsqueeze(0)
-    # y_test = torch.tensor(test[1:])  # .unsqueeze(0)
+    X_train = torch.tensor(train[:-1]) 
+    y_train = torch.tensor(train[1:]) 
 
     X_train_idx = np.arange(len(train)-1)
-    # X_test_idx = np.arange(len(train), len(timeseries)-1)
 
-
-    #corr_states = states.copy()
-
-    # shift states for plotting according to lookback
-    # states = states[lookback:]
-
-    wandb.login(key='a79ac9d4509caa0d5e477c939a41d790e7711171')
-
-    if args.eigenvalue_radius < 0.999:
-        project_name = f"Oscillatory_FastDecay"
-    else:
-        project_name = f"Oscillatory_SlowDecay"
-
-    if args.wandb:
-        run = wandb.init(
-            # Set the project where this run will be logged
-            project=f"PROTOTYPE_{str(args.num_subdyn)}_State_With_Control_Rand_F_c",
-            # dir=f'/state_{str(args.num_subdyn)}/fixpoint_change_{str(args.fix_point_change)}', # This is not a wandb feature yet, see issue: https://github.com/wandb/wandb/issues/6392
-            # name of the run is a combination of the model name and a timestamp
-            # reg{str(round(args.reg, 3))}_
-            name=f"smooth{str(round(args.smooth, 3))}_fixpoint_change_{str(args.fix_point_change)}_batch_size_{str(args.batch_size)}_epochs_{str(args.epochs)}",
-            # Track hyperparameters and run metadata
-            config={
-                "learning_rate": args.learning_rate,
-                "epochs": args.epochs,
-                "batch_size": args.batch_size,
-                "num_subdyn": args.num_subdyn,
-                "smooth": args.smooth,
-                "control_sparsity_reg": args.control_sparsity_reg,
-                "reg": args.reg,
-            },
-        )
 
     hidden_size = 4
     input_size = train.shape[1]
@@ -194,10 +151,6 @@ def main(args):
             #    f_i.weight.copy_(torch.tensor(A).float())
             
             
-            
-    
-
-
     optimizer = optim.Adam(model.parameters())
     loss_fn = nn.MSELoss()
 
@@ -208,61 +161,44 @@ def main(args):
     loader = torch.utils.data.DataLoader(
         data, batch_size=args.batch_size, shuffle=True, drop_last=True)
 
-    initial_teacher_forcing_ratio = 0.5
-    final_teacher_forcing_ratio = 0.0
     n_epochs = args.epochs
+
+
+    single_reconstruction_loss_history = []
+    coeff_sparsity_loss_history = []
+    control_sparsity_loss_history = []
+    smooth_reg_loss_history = []
+    loss_history = []
+
     for epoch in range(n_epochs):
         model.train()
         for (X_batch, y_batch), idx in loader:
 
-            teacher_forcing_ratio = initial_teacher_forcing_ratio - \
-                (initial_teacher_forcing_ratio -
-                 final_teacher_forcing_ratio) * (epoch / n_epochs)
-
             y_pred = model(X_batch.float(), X_train_idx[idx])
 
-            # indices of the batch
-            #y_pred = dummy_model(X_batch.float(), X_train_idx[idx])
 
-
-            # sparsifying control inputs with mask
-            # model.sparsity_mask()
-            # with torch.no_grad():
-            #    model.U = torch.relu(model.U)
-
-
-
-            # coeff_delta = model.coeffs[:, 1:] - model.coeffs[:, :-1]
-
-            coeff_delta = model.coeffs[:,
-                                                   1:] - model.coeffs[:, :-1]
-            # L2 norm of the difference between consecutive coefficients
-            # smooth_reg = torch.norm(coeff_delta, p=2)
-
+            coeff_delta = model.coeffs[:,1:] - model.coeffs[:, :-1]
+            
             smooth_reg = torch.norm(coeff_delta, p=2)
-
-            # smooth_reg_loss = args.smooth * smooth_reg * input_size
-
             smooth_reg_loss = args.smooth * smooth_reg * input_size
-
+            smooth_reg_loss_history.append(smooth_reg_loss.item())
 
             coeff_sparsity_loss = args.reg * model.coeff_sparsity_loss()
-            
-            # coeff_sparsity_loss = args.reg * model.coeff_sparsity_loss()
+            coeff_sparsity_loss_history.append(coeff_sparsity_loss.item())
 
             rec_loss = loss_fn(y_pred, y_batch)
+            single_reconstruction_loss_history.append(rec_loss.item())
+
             control_sparsity = model.control_sparsity_loss()
             control_sparsity_loss = args.control_sparsity_reg * \
                 control_sparsity
+            control_sparsity_loss_history.append(control_sparsity_loss.item())
 
             loss = smooth_reg_loss + rec_loss + coeff_sparsity_loss + control_sparsity_loss
-            wandb.log({'single_reconstruction_loss': rec_loss.item()})
-            wandb.log({'coeff_sparsity': coeff_sparsity_loss.item()})
+            loss_history.append(loss.item())
             
-            #wandb.log({'control_sparsity': control_sparsity_loss.item()})
-            wandb.log({'loss': loss.item()})
-            wandb.log({'sparsity_loss': coeff_sparsity_loss.item()})
-            wandb.log({'smooth_reg_loss': smooth_reg_loss.item()})
+            
+           
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 7)
@@ -275,8 +211,7 @@ def main(args):
         with torch.no_grad():
             y_pred = model(X_train.float(), X_train_idx)
             train_rmse = np.sqrt(loss_fn(y_pred, y_train))
-            # y_pred = dummy_model(X_test.float(), X_test_idx)
-            # test_rmse = np.sqrt(loss_fn(y_pred, y_test))
+            
         print("Epoch %d: train RMSE %.4f" %
               (epoch, train_rmse))
 
@@ -284,26 +219,23 @@ def main(args):
     print('Storing visualizations..')
     
     
-    corr_mat, best_corr = calculate_best_correlation(
+    corr_mat, _ = calculate_best_correlation(
         torch.tensor(coefficients).T, model.coeffs.T, args.num_subdyn)
-    coeff_loss = torch.square(1-torch.tensor(best_corr))
-    wandb.log({"coeff_correlation_loss": coeff_loss})
     
     # visualize correlation matrix
     fig = px.imshow(corr_mat, labels=dict(x="learned coefficients", y="ground truth coefficients", color="correlation"))
-    wandb.log({"correlation_matrix": fig})
+    # TODO plot this
+    
     
     if args.control_size > 0:
         control_corr_mat, control_best_corr = calculate_best_correlation(
             torch.tensor(controls).T, model.effective_U.T, args.control_size)
         control_loss = torch.square(1-torch.tensor(control_best_corr))
-        wandb.log({"control_correlation_loss": control_loss})
-            
+        print(f'Control loss: {control_loss.item()}')
 
-    
+            
     
     # set plotly theme
-    #plotly.io.templates.default = 'plotly_white'
     custom_template = go.layout.Template(
     layout=dict(
         xaxis=dict(
@@ -355,7 +287,8 @@ def main(args):
     fig.update_yaxes(showline=True, linewidth=2, linecolor='grey', title='magnitude')
     # update legend names
         
-    wandb.log({"coefficients": fig})
+        
+    # TODO plot coefficients
     plotly.io.write_image(fig, 'coeffs.svg', width=1600, height=400)
     
 
@@ -380,7 +313,7 @@ def main(args):
 
     fig = util.plotting(recon.detach().numpy(), title='multi-step reconstruction',
                         stack_plots=False)
-    wandb.log({"multi-step reconstruction": fig})
+    # TODO plot multi-step reconstruction
 
     timeseries_df = pd.DataFrame(timeseries)
     if not args.generate_data:
@@ -404,10 +337,8 @@ def main(args):
     # fig.update_layout(xaxis = dict(ticktext=time))
     fig.update_xaxes(showline=True, linewidth=2, linecolor='grey', title='time')
     fig.update_yaxes(showline=True, linewidth=2, linecolor='grey', title='amplitude')
-    wandb.log({"single-step + ground truth reconstruction": fig})
-    plotly.io.write_image(fig, 'reconstruction.svg', width=1600, height=400)
 
-    # print(model.U.detach().numpy())
+    plotly.io.write_image(fig, 'reconstruction.svg', width=1600, height=400)
 
     if args.control_size > 0:
         ctrl = pd.DataFrame(model.effective_U.detach().numpy()[
@@ -430,15 +361,14 @@ def main(args):
         ))
 
 
-        wandb.log({"Control Matrix": fig})
+        plotly.io.write_image(fig, 'control_matrix.svg', width=1600, height=400)
 
-    run.finish()
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path', type=str, default='models/')
-    parser.add_argument('--data_path', type=str, default='cebra_embedding_DS1.npy')
+    parser.add_argument('--data_path', type=str, default='data/data.npy')
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--learning_rate', type=float, default=0.001)
@@ -456,7 +386,6 @@ if __name__ == '__main__':
     parser.add_argument('--loss_reg', type=float, default=0.1)
     parser.add_argument('--plot_states', action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument('--generate_data', action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument('--wandb', action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument('--with_init', action=argparse.BooleanOptionalAction)
     args = parser.parse_args()
     print(args)
