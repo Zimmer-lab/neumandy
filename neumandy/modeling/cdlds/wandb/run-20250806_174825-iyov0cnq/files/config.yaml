@@ -1,0 +1,74 @@
+_wandb:
+    value:
+        cli_version: 0.21.0
+        e:
+            9y6cdqqtrcxgb5jjgbblami30dxm55oz:
+                codePath: neumandy\modeling\cdlds\train_sweep_0210_ALL_TRUE_with_control2.py
+                codePathLocal: train_sweep_0210_ALL_TRUE_with_control2.py
+                cpu_count: 6
+                cpu_count_logical: 12
+                cudaVersion: "12.6"
+                disk:
+                    /:
+                        total: "999258222592"
+                        used: "855195181056"
+                email: lianaakobian@gmail.com
+                executable: C:\Users\Liana\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.10_qbz5n2kfra8p0\python.exe
+                git:
+                    commit: 70301f9d78e56705a96cb205b67aa20ed0d54c3c
+                    remote: https://github.com/Zimmer-lab/neumandy.git
+                gpu: NVIDIA GeForce RTX 3070
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ampere
+                      cudaCores: 5888
+                      memoryTotal: "8589934592"
+                      name: NVIDIA GeForce RTX 3070
+                      uuid: GPU-88894cc4-41b1-fd29-7890-46f049c73a3c
+                host: DESKTOP-0U5L2GJ
+                memory:
+                    total: "34272149504"
+                os: Windows-10-10.0.26100-SP0
+                program: C:\Users\Liana\neumandy\neumandy\modeling\cdlds\train_sweep_0210_ALL_TRUE_with_control2.py
+                python: CPython 3.10.11
+                root: C:\Users\Liana\neumandy\neumandy\modeling\cdlds
+                startedAt: "2025-08-06T15:48:25.093026Z"
+                writerId: 9y6cdqqtrcxgb5jjgbblami30dxm55oz
+        m: []
+        python_version: 3.10.11
+        t:
+            "1":
+                - 1
+                - 5
+                - 51
+                - 53
+                - 105
+            "2":
+                - 1
+                - 5
+                - 51
+                - 53
+                - 105
+            "3":
+                - 13
+                - 16
+            "4": 3.10.11
+            "5": 0.21.0
+            "8":
+                - 3
+            "12": 0.21.0
+            "13": windows-amd64
+batch_size:
+    value: 32
+control_sparsity_reg:
+    value: 0.0001
+epochs:
+    value: 20
+learning_rate:
+    value: 0.001
+num_subdyn:
+    value: 2
+reg:
+    value: 0.001
+smooth:
+    value: 0.0001

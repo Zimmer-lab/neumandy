@@ -1,0 +1,40 @@
+{
+  "os": "Windows-10-10.0.26100-SP0",
+  "python": "CPython 3.10.11",
+  "startedAt": "2025-08-07T08:51:14.284479Z",
+  "program": "C:\\Users\\Liana\\neumandy\\neumandy\\modeling\\cdlds\\train_sweep_0210_ALL_TRUE_with_control2.py",
+  "codePath": "neumandy\\modeling\\cdlds\\train_sweep_0210_ALL_TRUE_with_control2.py",
+  "codePathLocal": "train_sweep_0210_ALL_TRUE_with_control2.py",
+  "git": {
+    "remote": "https://github.com/Zimmer-lab/neumandy.git",
+    "commit": "70301f9d78e56705a96cb205b67aa20ed0d54c3c"
+  },
+  "email": "lianaakobian@gmail.com",
+  "root": "C:\\Users\\Liana\\neumandy\\neumandy\\modeling\\cdlds",
+  "host": "DESKTOP-0U5L2GJ",
+  "executable": "C:\\Users\\Liana\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.10_qbz5n2kfra8p0\\python.exe",
+  "cpu_count": 6,
+  "cpu_count_logical": 12,
+  "gpu": "NVIDIA GeForce RTX 3070",
+  "gpu_count": 1,
+  "disk": {
+    "/": {
+      "total": "999258222592",
+      "used": "853853433856"
+    }
+  },
+  "memory": {
+    "total": "34272149504"
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA GeForce RTX 3070",
+      "memoryTotal": "8589934592",
+      "cudaCores": 5888,
+      "architecture": "Ampere",
+      "uuid": "GPU-88894cc4-41b1-fd29-7890-46f049c73a3c"
+    }
+  ],
+  "cudaVersion": "12.6",
+  "writerId": "9kusf0hmthg5fih33p3zcur0g3uppq4t"
+}
